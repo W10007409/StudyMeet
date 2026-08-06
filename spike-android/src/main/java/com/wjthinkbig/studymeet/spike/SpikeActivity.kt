@@ -26,6 +26,8 @@ import io.livekit.android.room.track.LocalVideoTrackOptions
 import io.livekit.android.room.track.VideoCaptureParameter
 import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class SpikeActivity : AppCompatActivity() {
 
@@ -44,6 +46,12 @@ class SpikeActivity : AppCompatActivity() {
     /** PIP는 접속이 성립한 뒤에만 의미가 있다. 권한 다이얼로그가 뜰 때도 onUserLeaveHint가 불린다. */
     private var isConnected = false
 
+    /** 카메라 토글을 직렬화한다. 순서가 뒤집히면 화면이 꺼진 채 카메라가 켜질 수 있다. */
+    private val cameraMutex = Mutex()
+
+    @Volatile
+    private var desiredCameraEnabled = true
+
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: AndroidIntent?) {
             when (intent?.action) {
@@ -54,8 +62,11 @@ class SpikeActivity : AppCompatActivity() {
     }
 
     private fun setCameraEnabled(enabled: Boolean) {
+        desiredCameraEnabled = enabled
         lifecycleScope.launch {
-            room.localParticipant.setCameraEnabled(enabled)
+            cameraMutex.withLock {
+                room.localParticipant.setCameraEnabled(desiredCameraEnabled)
+            }
         }
     }
 
