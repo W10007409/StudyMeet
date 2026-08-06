@@ -44,3 +44,10 @@ P2P Task 1: complete (commits 0174323..2c1627d, review clean after 1 fix pass)
 P2P Task 2: complete (commits abd4905..1fce828, review clean after 1 fix pass)
   Instrumented test now runs unconditionally - no server, no credentials.
   Tablet + 'adb logcat -d -s PipSpike' is all that is needed for the number.
+P2P Task 3: complete (commit 6af4855, review clean, no fix pass)
+  BuildConfig.USE_FOREGROUND_SERVICE gates all three service call sites.
+  Enables the FGS-off contrast run that settles design 5.1's assumption.
+  PART A DONE - a tablet alone now yields the PIP camera measurement.
+P2P Task 4: complete (commit 8d04125, review clean, no fix pass)
+  Signalling server verified end to end with two ws clients on Node 22.
+  README clarified after review: role= is client-side only, server ignores it.
