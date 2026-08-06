@@ -198,9 +198,11 @@ git commit -m "docs: add Phase 0 PoC result template"
 **Interfaces:**
 - Consumes: `local.properties`의 `livekit.url`, `livekit.token.android` (Task 1)
 - Produces:
-  - `FrameCounter` — `livekit.org.webrtc.VideoSink` 구현. `val count: AtomicInteger`
-  - `SpikeActivity` — `companion object { val localFrames: FrameCounter }`, `fun enterPipNow(): Boolean`
+  - `FrameCounter` — `livekit.org.webrtc.VideoSink` 구현. `val count: AtomicInteger`, `fun snapshot(): Int`, `fun reset()`
+  - `SpikeActivity` — `companion object { val localFrames: FrameCounter; val remoteFrames: FrameCounter }`
   - `BuildConfig.LIVEKIT_URL`, `BuildConfig.LIVEKIT_TOKEN`
+
+  `enterPipNow()` 는 이 태스크가 아니라 **Task 4**의 산출물이다. Task 2에서는 만들지 않는다.
 
 - [ ] **Step 1: 버전 카탈로그에 LiveKit과 테스트 의존성 추가**
 
@@ -228,6 +230,15 @@ Modify `settings.gradle.kts` — 마지막 줄 `include(":app")` 아래에 추�
 
 ```kotlin
 include(":spike-android")
+```
+
+`livekit-android:2.27.0` 은 `com.github.davidliu:audioswitch` 를 전이 의존성으로 끌어오는데 이 아티팩트는 JitPack에만 있다. `dependencyResolutionManagement.repositories` 블록의 `mavenCentral()` 아래에 추가한다. **반드시 `content` 로 범위를 좁힌다** — 이 블록은 `app` 을 포함한 모든 모듈이 공유하므로, 범위를 열어두면 JitPack이 프로젝트 전체의 의존성 해석 경로가 된다.
+
+```kotlin
+        maven {
+            url = uri("https://jitpack.io")
+            content { includeModule("com.github.davidliu", "audioswitch") }
+        }
 ```
 
 - [ ] **Step 3: 모듈 빌드 스크립트 작성**
@@ -362,6 +373,10 @@ class FrameCounter(val label: String) : VideoSink {
     }
 
     fun snapshot(): Int = count.get()
+
+    fun reset() {
+        count.set(0)
+    }
 }
 ```
 
@@ -459,9 +474,22 @@ class SpikeActivity : AppCompatActivity() {
         localRenderer = findViewById(R.id.localRenderer)
         statusText = findViewById(R.id.statusText)
 
+        // 캡처 해상도를 360p/24fps로 고정한다. Global Constraints의 화질 규격이며,
+        // SDK 기본값(720p/30fps)으로 재면 이 스파이크가 뽑는 프레임 수치가 규격과 무관해진다.
         room = LiveKit.create(
             appContext = applicationContext,
-            options = RoomOptions(adaptiveStream = false, dynacast = false),
+            options = RoomOptions(
+                adaptiveStream = false,
+                dynacast = false,
+                videoTrackCaptureDefaults = LocalVideoTrackOptions(
+                    position = CameraPosition.FRONT,
+                    captureParams = VideoCaptureParameter(
+                        width = 640,
+                        height = 360,
+                        maxFps = 24,
+                    ),
+                ),
+            ),
         )
         room.initVideoRenderer(remoteRenderer)
         room.initVideoRenderer(localRenderer)
@@ -481,24 +509,34 @@ class SpikeActivity : AppCompatActivity() {
             return
         }
 
+        // 카운터는 프로세스 수명 싱글턴이다. 재접속 시 이전 측정치가 남아 다음 측정을 부풀린다.
+        localFrames.reset()
+        remoteFrames.reset()
+
         lifecycleScope.launch {
             launch { observeEvents() }
 
-            statusText.text = "접속 중…"
-            room.connect(BuildConfig.LIVEKIT_URL, BuildConfig.LIVEKIT_TOKEN)
+            // 자격증명이 손으로 입력되는 스파이크라 접속 실패가 가장 흔한 첫 실패다.
+            // 잡지 않으면 화면에 아무 단서 없이 크래시한다.
+            try {
+                statusText.text = "접속 중…"
+                room.connect(BuildConfig.LIVEKIT_URL, BuildConfig.LIVEKIT_TOKEN)
 
-            room.localParticipant.setMicrophoneEnabled(true)
-            room.localParticipant.setCameraEnabled(true)
+                room.localParticipant.setMicrophoneEnabled(true)
+                room.localParticipant.setCameraEnabled(true)
 
-            val local = room.localParticipant.getTrackPublication(
-                io.livekit.android.room.track.Track.Source.CAMERA
-            )?.track as? LocalVideoTrack
+                val local = room.localParticipant.getTrackPublication(
+                    io.livekit.android.room.track.Track.Source.CAMERA
+                )?.track as? LocalVideoTrack
 
-            local?.let {
-                it.addRenderer(localRenderer)
-                it.addRenderer(localFrames)
+                local?.let {
+                    it.addRenderer(localRenderer)
+                    it.addRenderer(localFrames)
+                }
+                statusText.text = "접속됨"
+            } catch (e: Exception) {
+                statusText.text = "접속 실패: ${e.message}"
             }
-            statusText.text = "접속됨"
         }
     }
 
