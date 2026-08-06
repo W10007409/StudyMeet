@@ -16,4 +16,8 @@ class FrameCounter(val label: String) : VideoSink {
     }
 
     fun snapshot(): Int = count.get()
+
+    fun reset() {
+        count.set(0)
+    }
 }

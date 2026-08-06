@@ -52,7 +52,18 @@ class SpikeActivity : AppCompatActivity() {
 
         room = LiveKit.create(
             appContext = applicationContext,
-            options = RoomOptions(adaptiveStream = false, dynacast = false),
+            options = RoomOptions(
+                adaptiveStream = false,
+                dynacast = false,
+                videoTrackCaptureDefaults = LocalVideoTrackOptions(
+                    position = CameraPosition.FRONT,
+                    captureParams = VideoCaptureParameter(
+                        width = 640,
+                        height = 360,
+                        maxFps = 24,
+                    ),
+                ),
+            ),
         )
         room.initVideoRenderer(remoteRenderer)
         room.initVideoRenderer(localRenderer)
@@ -72,24 +83,31 @@ class SpikeActivity : AppCompatActivity() {
             return
         }
 
+        localFrames.reset()
+        remoteFrames.reset()
+
         lifecycleScope.launch {
             launch { observeEvents() }
 
-            statusText.text = "접속 중…"
-            room.connect(BuildConfig.LIVEKIT_URL, BuildConfig.LIVEKIT_TOKEN)
+            try {
+                statusText.text = "접속 중…"
+                room.connect(BuildConfig.LIVEKIT_URL, BuildConfig.LIVEKIT_TOKEN)
 
-            room.localParticipant.setMicrophoneEnabled(true)
-            room.localParticipant.setCameraEnabled(true)
+                room.localParticipant.setMicrophoneEnabled(true)
+                room.localParticipant.setCameraEnabled(true)
 
-            val local = room.localParticipant.getTrackPublication(
-                io.livekit.android.room.track.Track.Source.CAMERA
-            )?.track as? LocalVideoTrack
+                val local = room.localParticipant.getTrackPublication(
+                    io.livekit.android.room.track.Track.Source.CAMERA
+                )?.track as? LocalVideoTrack
 
-            local?.let {
-                it.addRenderer(localRenderer)
-                it.addRenderer(localFrames)
+                local?.let {
+                    it.addRenderer(localRenderer)
+                    it.addRenderer(localFrames)
+                }
+                statusText.text = "접속됨"
+            } catch (e: Exception) {
+                statusText.text = "접속 실패: ${e.message}"
             }
-            statusText.text = "접속됨"
         }
     }
 
