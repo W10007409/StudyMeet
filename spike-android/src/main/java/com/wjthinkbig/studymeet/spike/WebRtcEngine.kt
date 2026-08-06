@@ -79,7 +79,11 @@ class WebRtcEngine(
         if (enabled) {
             cam.startCapture(WIDTH, HEIGHT, FPS)
         } else {
-            cam.stopCapture()
+            try {
+                cam.stopCapture()
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
         }
     }
 

@@ -144,6 +144,8 @@ class SpikeActivity : AppCompatActivity() {
     override fun onDestroy() {
         unregisterReceiver(screenReceiver)
         engine.release()
+        localRenderer.release()
+        remoteRenderer.release()
         eglBase.release()
         ClassForegroundService.stop(this)
         super.onDestroy()
