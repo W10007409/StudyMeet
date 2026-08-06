@@ -9,7 +9,6 @@ import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
 import org.webrtc.IceCandidate
 import org.webrtc.MediaConstraints
-import org.webrtc.MediaStreamTrack
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
 import org.webrtc.SdpObserver
@@ -41,6 +40,9 @@ class WebRtcEngine(
     private var surfaceHelper: SurfaceTextureHelper? = null
     private var localTrack: VideoTrack? = null
     private var peerConnection: PeerConnection? = null
+    private val candidateLock = Any()
+    private var remoteDescriptionSet = false
+    private val pendingCandidates = mutableListOf<IceCandidate>()
 
     /** 전면 카메라를 열고 트랙을 만들어 sink와 preview에 붙인다. 성공하면 true. */
     fun startLocalCamera(sink: VideoSink, preview: SurfaceViewRenderer): Boolean {
@@ -175,7 +177,11 @@ class WebRtcEngine(
         when (json.getString("type")) {
             "offer" -> {
                 pc.setRemoteDescription(
-                    SimpleSdpObserver(),
+                    object : SimpleSdpObserver() {
+                        override fun onSetSuccess() {
+                            flushPendingCandidates(pc)
+                        }
+                    },
                     SessionDescription(SessionDescription.Type.OFFER, json.getString("sdp")),
                 )
                 pc.createAnswer(
@@ -194,22 +200,60 @@ class WebRtcEngine(
                 )
             }
             "answer" -> pc.setRemoteDescription(
-                SimpleSdpObserver(),
+                object : SimpleSdpObserver() {
+                    override fun onSetSuccess() {
+                        flushPendingCandidates(pc)
+                    }
+                },
                 SessionDescription(SessionDescription.Type.ANSWER, json.getString("sdp")),
             )
-            "candidate" -> pc.addIceCandidate(
+            "candidate" -> queueOrAddCandidate(
+                pc,
                 IceCandidate(
                     json.getString("sdpMid"),
                     json.getInt("sdpMLineIndex"),
                     json.getString("candidate"),
-                )
+                ),
             )
+        }
+    }
+
+    /** 원격 description이 적용된 뒤에만 후보를 넣을 수 있다. 그 전에 온 것은 모아 두었다 흘려보낸다. */
+    private fun queueOrAddCandidate(pc: PeerConnection, candidate: IceCandidate) {
+        synchronized(candidateLock) {
+            if (remoteDescriptionSet) {
+                addCandidateLogged(pc, candidate)
+            } else {
+                pendingCandidates.add(candidate)
+            }
+        }
+    }
+
+    private fun flushPendingCandidates(pc: PeerConnection) {
+        synchronized(candidateLock) {
+            remoteDescriptionSet = true
+            pendingCandidates.forEach { addCandidateLogged(pc, it) }
+            pendingCandidates.clear()
+        }
+    }
+
+    /**
+     * 거부된 후보는 조용히 사라지면 안 된다.
+     * 릴레이 비율 측정에서 구현 결함과 실제 NAT 실패를 구분할 수 없게 된다.
+     */
+    private fun addCandidateLogged(pc: PeerConnection, candidate: IceCandidate) {
+        if (!pc.addIceCandidate(candidate)) {
+            android.util.Log.w("PipSpike", "addIceCandidate rejected: ${candidate.sdp}")
         }
     }
 
     fun release() {
         peerConnection?.dispose()
         peerConnection = null
+        synchronized(candidateLock) {
+            pendingCandidates.clear()
+            remoteDescriptionSet = false
+        }
         try {
             capturer?.stopCapture()
         } catch (e: InterruptedException) {
