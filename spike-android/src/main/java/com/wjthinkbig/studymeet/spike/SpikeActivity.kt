@@ -37,6 +37,9 @@ class SpikeActivity : AppCompatActivity() {
     private lateinit var localRenderer: SurfaceViewRenderer
     private lateinit var statusText: TextView
 
+    /** PIP는 접속이 성립한 뒤에만 의미가 있다. 권한 다이얼로그가 뜰 때도 onUserLeaveHint가 불린다. */
+    private var isConnected = false
+
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             if (granted.values.all { it }) {
@@ -110,8 +113,10 @@ class SpikeActivity : AppCompatActivity() {
                     it.addRenderer(localFrames)
                 }
                 statusText.text = "접속됨"
+                isConnected = true
             } catch (e: Exception) {
                 ClassForegroundService.stop(this@SpikeActivity)
+                isConnected = false
                 statusText.text = "접속 실패: ${e.message}"
             }
         }
@@ -126,7 +131,10 @@ class SpikeActivity : AppCompatActivity() {
                         it.addRenderer(remoteFrames)
                     }
                 }
-                is RoomEvent.Disconnected -> statusText.text = "연결 끊김"
+                is RoomEvent.Disconnected -> {
+                    isConnected = false
+                    statusText.text = "연결 끊김"
+                }
                 else -> Unit
             }
         }
@@ -142,7 +150,7 @@ class SpikeActivity : AppCompatActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        enterPipNow()
+        if (isConnected) enterPipNow()
     }
 
     override fun onPictureInPictureModeChanged(
