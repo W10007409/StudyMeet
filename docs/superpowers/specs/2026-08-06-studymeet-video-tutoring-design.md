@@ -50,63 +50,111 @@
 2. **트랙 세밀 제어 불가.** 학습 중 촬영 활동을 위해 카메라를 전환하거나 트랙을 일시 정지해야 하는데, 앱→웹 제어 API가 없어 `evaluateJavascript`로 DOM을 조작하는 비공식 방식에 의존해야 한다.
 3. **KMP 부적합.** WebView 기반은 공유 코드로 추상화하기 어렵다.
 
-### 2.2 LiveKit 채택
+### 2.2 네이티브 WebRTC로 간다 (공통 결론)
 
-| 항목 | 구루미(WebView) | LiveKit(네이티브 SDK) |
+구루미를 배제하고 나면 남는 요건은 하나다 — **네이티브 WebRTC 스택**이어야 PIP와 트랙 제어가 가능하다.
+
+| 항목 | 구루미(WebView) | 네이티브 WebRTC |
 |---|---|---|
 | Android PIP + 카메라 유지 | 가능하나 웹 UI가 축소 시 붕괴 | 완전 제어. PIP에 원격 렌더러만 배치 |
 | iOS PIP + 카메라 유지 | 불가 | 가능 (`AVPictureInPictureController` 경로) |
-| 트랙 제어 | 비공식 우회 | `switchCamera()` 등 정식 API |
+| 트랙 제어 | 비공식 우회 | 카메라 전환·트랙 일시정지 정식 API |
 | 학습 화면 동기화 | 별도 채널 필요 | DataChannel 내장 |
-| KMP 적합성 | 낮음 | Android는 Kotlin SDK 직결, iOS는 Swift 주입 |
-| 호스팅 | 벤더 종속 | OSS. Cloud/셀프호스팅 선택 자유 |
+| KMP 적합성 | 낮음 | 플랫폼별 `actual` 구현으로 수용 가능 |
 
-**대안 검토**: Agora, Zoom Video SDK, Amazon Chime SDK 모두 네이티브 SDK를 제공하므로 PIP 요건은 충족한다. 그러나 DataChannel로 학습 화면 동기화까지 함께 태우는 확장성과 자체 호스팅 자유도에서 LiveKit이 우위다. 또한 LiveKit Cloud와 셀프호스팅의 API가 동일해, PoC는 Cloud로 빠르게 진행하고 운영은 셀프호스팅으로 앱 코드 변경 없이 이관할 수 있다.
+여기서 갈래가 둘로 나뉜다 — **P2P(raw libwebrtc)** 냐 **SFU(LiveKit 등)** 냐. §2.3에서 P2P를 1단계로 택했다.
 
-### 2.3 P2P 대신 SFU를 쓰는 이유
+**SFU 후보 비교 (후속 과제용으로 보존)**: Agora, Zoom Video SDK, Amazon Chime SDK 모두 네이티브 SDK를 제공하므로 PIP 요건은 충족한다. 그중 LiveKit이 우위인 점은 OSS라 라이선스 비용이 없고, 자체 호스팅 자유도가 높으며, Cloud와 셀프호스팅의 API가 동일해 앱 코드 변경 없이 이관할 수 있다는 것이다. **SFU 도입을 재검토하는 시점에는 LiveKit을 1순위 후보로 본다.**
 
-1:1 통화는 이론상 P2P 직결이 가능하며 서버 대역폭을 크게 절약한다. 그러나 다음 이유로 SFU를 택한다.
+참고로 LiveKit Swift SDK 2.16.0 소스 확인 결과, iOS에서 필요한 것들이 모두 공개 API로 제공된다(`CameraCapturer.captureSession`, `isMultitaskingAccessEnabled`, `VideoView.avSampleBufferDisplayLayer`). SFU로 전환할 경우 iOS 구현 부담이 크게 줄어든다는 뜻이며, 이는 §2.3의 재검토 판단에 유리한 요소다.
 
-- 동시 3,000방 규모에서 SFU 하행은 약 2.7 Gbps(360p 기준)로, P2P 대비 절감액이 국내 정액 회선 기준 월 수백만 원 수준에 그친다.
-- P2P를 직접 구현하려면 시그널링 서버, ICE/TURN 관리, 재연결, 대역폭 적응, 네트워크 전환(WiFi↔LTE) 처리를 모두 만들어야 한다. 개발·운영 비용이 절감액을 초과한다.
-- 향후 학부모 참관이나 관리자 모니터링이 추가되면 1:1 전제가 깨진다. SFU면 코드 변경 없이 수용된다.
-- 녹화를 하지 않기로 하면서 P2P의 최대 단점(서버측 녹화 불가)은 사라졌으나, 동시에 P2P를 택할 유인도 함께 사라졌다.
+### 2.3 토폴로지 — P2P 우선, SFU는 후속 과제 (결정 변경)
+
+**1단계는 raw WebRTC(libwebrtc) 기반 P2P 직결로 간다. LiveKit SFU 도입은 별도 후속 과제로 미룬다.**
+
+수업이 영구히 1:1로 고정된다는 제품 결정이 내려졌고, SFU를 쓰려면 노드 클러스터·Redis·대용량 대역폭 회선을 먼저 구축해야 한다. P2P는 그 구축 없이도 착수할 수 있어 초기 진입이 가볍다.
+
+**P2P가 이 제품에 맞는 이유**
+- 1:1은 WebRTC가 원래 설계된 형태다. 중계 노드가 구조적으로 불필요하다.
+- 미디어가 서버를 지나지 않아 서버 대역폭이 릴레이분(전체의 일부)으로 줄어든다.
+- 릴레이 홉이 없어 지연이 가장 낮다.
+- 녹화를 하지 않으므로 P2P의 최대 단점인 "서버측 녹화 불가"가 해당되지 않는다.
+
+**대신 감수하는 것 — 축소되지 않는 비용**
+- **시그널링 서버는 여전히 필요하다.** WebRTC에 포함되어 있지 않다. SDP offer/answer와 ICE 후보를 중계할 서버를 직접 만든다. 다만 텍스트만 흐르므로 SFU와 달리 대역폭 회선이 필요 없고 인스턴스 하나로 시작할 수 있다.
+- **TURN도 여전히 필요하다.** 직결 실패분은 릴레이해야 하며, 그 트래픽은 SFU와 동일한 대역폭을 먹는다. 절감액은 릴레이 비율에 반비례한다.
+- 재연결·ICE restart·WiFi↔LTE 전환·대역폭 적응·오디오 라우팅을 직접 구현한다. Android/iOS 각각.
+- **서버측 관측이 사라진다.** 세션 품질 통계가 클라이언트 리포트에만 남는다. §4.6의 "누적 끊김 시간"은 클라이언트가 보고한 값에 의존하게 되며, 앱이 죽은 구간은 기록되지 않는다.
+- iOS PiP용 렌더러를 직접 만들어야 한다 (§5.2 참조).
+
+**후속 과제로 SFU를 재검토할 조건** — 파일럿에서 다음 수치를 실측한 뒤 판단한다:
+1. **TURN 릴레이 비율.** 10% 이하면 P2P 유지가 유리하다. 30%를 넘으면 절감액이 반감되어 SFU 재검토 가치가 생긴다. 아동 태블릿은 통신사 CGNAT과 학교·공공 와이파이 비중이 높아 일반 인터넷보다 릴레이율이 높을 수 있다.
+2. **재연결 발생 빈도와 복구 성공률.** 10분 수업에서 1분 끊기면 수업의 10%가 사라진다.
+3. **동시 방 수의 실제 추이.** 3,000을 크게 넘어가면 대역폭이 선형으로 늘어 P2P의 우위가 커진다.
+
+교체 비용을 낮추기 위해 화상 엔진은 §10의 `VideoEngine` 인터페이스 뒤에 둔다. SFU로 이관하더라도 도메인·UI 계층은 건드리지 않는다.
+
+### 2.4 클라이언트 라이브러리
+
+P2P를 택하면 LiveKit SDK는 쓸 수 없다. **LiveKit은 SFU 전용이며 P2P 모드가 없다.** P2P에 대응하는 "배터리 포함" 오픈소스 SDK는 존재하지 않는다 — Janus·mediasoup은 SFU이고, Pion은 저수준 라이브러리다.
+
+따라서 **raw libwebrtc를 직접 사용한다**:
+
+| 플랫폼 | 라이브러리 | 비고 |
+|---|---|---|
+| Android | `io.github.webrtc-sdk:android` (또는 Google libwebrtc 빌드) | `SurfaceViewRenderer`, `Camera2Capturer` 제공 |
+| iOS | `WebRTC` framework (동일 프로젝트의 iOS 빌드) | `RTCCameraVideoCapturer.captureSession` 공개 |
+
+LiveKit Swift SDK가 제공하던 `VideoView.avSampleBufferDisplayLayer`에 해당하는 것이 raw libwebrtc에는 없다. iOS PiP용 렌더러는 직접 구현한다.
 
 ---
 
 ## 3. 시스템 구성
 
 ```
-[아이 태블릿 앱]  <--SRTP / DataChannel-->  [LiveKit SFU]  <-->  [선생님 앱/웹]
-       |                                          |
-       | REST (토큰 발급, 준비상태 보고, 사진 업로드) | Webhook (입퇴장, 연결끊김)
-       v                                          v
+[아이 태블릿 앱]  <=== SRTP / DataChannel (직결) ===>  [선생님 앱/웹]
+       |                                                    |
+       +---- WSS 시그널링 (SDP, ICE) ----[시그널링 서버]-----+
+       |                                        |
+       | REST (준비상태 보고, 사진 업로드)         | 세션 이벤트
+       v                                        v
                  [북클럽 백엔드 + StudyMeet 서비스]
+
+                        [TURN/TLS 443]   직결 실패 시에만 미디어 중계
 ```
+
+미디어는 두 단말 사이를 **직접** 흐른다. 서버는 연결을 맺어주기만 하고, 직결이 실패한 세션만 TURN이 중계한다.
 
 ### 3.1 인프라 규격
 
 ```
 [LB]
-  └─ [LiveKit SFU × 3 노드 (+예비 1, N+1)]  <-->  [Redis: 방 라우팅]
-       └─ [TURN over TLS 443]   학교·공공 와이파이 방화벽 대응. 필수
+  └─ [시그널링 서버 × 2 (WebSocket)]   텍스트만. SDP offer/answer + ICE 후보 중계
+       └─ 방 상태·참가자 매칭. 필요 시 Redis로 인스턴스 간 공유
+[STUN]  공인 IP 발견. 초기엔 공개 서버, 운영은 자체
+[TURN over TLS 443]  학교·공공 와이파이 방화벽 대응. 필수
 [백엔드]
-  ├─ JWT 발급 (방ID, 역할, 권한)
-  ├─ Webhook 수신 (participant_joined / participant_disconnected)
+  ├─ 세션 토큰 발급 (방ID, 역할, 권한)
+  ├─ 세션 이벤트 수신 (입장/퇴장/연결끊김 — 클라이언트 보고 기반)
   └─ 학생 준비상태 조회 API (운영·선생님용)
 ```
 
-**대역폭 산정**
+**시그널링 부하**: 3,000방 ÷ 600초 = 초당 약 5방 생성/파기. 메시지는 방당 SDP 2회 + ICE 후보 수십 개로, 전부 텍스트다. 대역폭 회선이 필요 없고 소형 인스턴스 2대(HA용)로 시작할 수 있다. 정각 동시 접속은 §4.4의 대기실 5분 전 오픈으로 분산한다.
 
-| 화질 | 참가자당 | 3,000방 피크 하행 |
-|---|---|---|
-| 360p24 (기본) | 0.45 Mbps | 약 2.7 Gbps |
-| 480p24 (상한) | 0.6 Mbps | 약 3.6 Gbps |
-| 720p30 (미채택) | 1.5 Mbps | 약 9 Gbps |
+**대역폭 산정 — 서버가 부담하는 것은 TURN 릴레이분뿐이다**
 
-1:1 튜터링은 얼굴 확인이 목적이므로 **기본 360p, 상한 480p**로 캡을 둔다. 화질은 서버 설정으로 분리해 나중에 조정 가능하게 한다.
+| 화질 | 참가자당 | 릴레이 15% 가정 | 릴레이 30% 가정 |
+|---|---|---|---|
+| 270p24 (기본) | 0.30 Mbps | 약 0.27 Gbps | 약 0.54 Gbps |
+| 360p24 (상한) | 0.45 Mbps | 약 0.41 Gbps | 약 0.81 Gbps |
 
-**호스팅 권고**: 이 규모에서는 아웃바운드 트래픽 비용이 인스턴스 비용을 압도한다. AWS 종량 과금(GB당)으로는 월 1천만 원대까지 발생할 수 있으므로, **국내 IDC 또는 NCP의 정액 대역폭**을 권장한다. LiveKit Cloud는 참가자-분 과금 구조상 이 규모에서 비용이 성립하지 않으므로 PoC 용도로만 사용한다.
+> 비교: 같은 조건에서 SFU를 쓰면 릴레이 비율과 무관하게 270p 1.8 Gbps / 360p 2.7 Gbps가 항상 든다.
+
+**화질 정책**: 1:1 튜터링은 얼굴 확인이 목적이고, 적응형 레이아웃에서 상대 영상은 10~11인치 태블릿 가로의 약 30% 폭(약 300px)을 차지한다. 360p(640×360)는 이미 과잉이다. **기본 270p, 상한 360p**로 두고, [크게 보기]로 확대했을 때만 상향한다. 화질은 서버 설정으로 분리해 조정 가능하게 한다.
+
+**릴레이 비율이 이 설계의 핵심 변수다.** 위 표에서 보듯 서버 비용이 릴레이 비율에 정비례한다. 파일럿에서 반드시 실측해 §2.3의 SFU 재검토 판단에 쓴다.
+
+**호스팅 권고**: TURN은 국내 IDC 또는 NCP의 정액 대역폭을 쓴다. 릴레이가 늘어나도 요금이 선형으로 튀지 않게 하기 위함이다. 시그널링 서버는 트래픽이 작아 어디에 두어도 무방하다.
 
 **부하 특성**
 
@@ -147,10 +195,17 @@ IDLE
 
 | 경로 | 대상 상태 | 지연 |
 |---|---|---|
-| **LiveKit DataChannel** | `PIP`, `SCREEN_OFF` — 연결이 살아있는 경우 | 100ms 이하 |
-| **LiveKit Webhook → 백엔드 → 선생님 푸시/WS** | `DISCONNECTED` — 앱이 죽어 직접 전송 불가 | 1~2초 |
+| **WebRTC DataChannel (P2P 직결)** | `PIP`, `SCREEN_OFF` — 앱이 살아있고 연결도 살아있는 경우 | 100ms 이하 |
+| **시그널링 WebSocket 끊김 감지 → 백엔드 → 선생님 푸시/WS** | `DISCONNECTED` — 앱이 죽어 직접 전송 불가 | 1~3초 |
+| **선생님 단말의 `iceConnectionState` 감시** | `DISCONNECTED` 교차 확인 | 즉시 |
 
 두 경로 중 하나만 쓰면 반드시 구멍이 생긴다. 반드시 함께 구현한다.
+
+**P2P 전환에 따른 변경.** 당초 이 자리는 SFU의 서버측 Webhook(`participant_disconnected`)이 담당하도록 설계했다. P2P에는 미디어를 보는 서버가 없으므로 대체 수단이 필요하다:
+
+- **시그널링 WebSocket을 수업 시간 내내 열어 둔다.** 연결 수립 후 끊지 않고 생존 신호(heartbeat) 채널로 계속 쓴다. 아이 앱이 죽으면 이 소켓이 끊기고, 서버가 그것을 감지해 선생님에게 알린다. 이것이 사라진 Webhook을 대신하는 유일한 서버측 신호다.
+- **선생님 단말이 두 번째 관측자다.** `RTCPeerConnection.iceConnectionState`가 `disconnected`/`failed`로 바뀌면 즉시 이탈로 판정한다. 서버보다 빠르지만 선생님 단말 자체가 문제일 때는 오탐이 나므로, 서버 신호와 교차 확인한다.
+- **§4.6의 누적 끊김 시간은 이제 클라이언트 보고에 의존한다.** 서버가 미디어 품질을 직접 보지 못하므로, 양쪽 단말이 주기적으로 자신의 연결 상태를 백엔드에 보고하게 한다. 앱이 완전히 죽은 구간은 시그널링 소켓 단절 시각으로 역산한다. SFU 대비 정확도가 낮다는 점을 운영에 알린다.
 
 ### 4.4 입장
 
@@ -229,40 +284,39 @@ Info.plist  Background Modes: audio, voip
 
 AVAudioSession: category .playAndRecord, mode .videoChat
 
-// 카메라 — iPad 멀티태스킹 접근
-if capturer.isMultitaskingAccessSupported {
-    capturer.isMultitaskingAccessEnabled = true
+// 카메라 — iPad 멀티태스킹 접근. RTCCameraVideoCapturer.captureSession 은 공개다.
+let session = cameraCapturer.captureSession
+if session.isMultitaskingCameraAccessSupported {
+    session.beginConfiguration()
+    session.isMultitaskingCameraAccessEnabled = true
+    session.commitConfiguration()
 }
 
-// PiP — 원격 영상 레이어
-videoView.renderMode = .sampleBuffer
-let layer = videoView.avSampleBufferDisplayLayer
+// PiP — 원격 영상 레이어. 직접 만든다 (아래 5.2.1)
+let layer = SampleBufferVideoRenderer().sampleBufferDisplayLayer
 AVPictureInPictureController(
     contentSource: .init(activeVideoCallSourceView:contentViewController:))
 canStartPictureInPictureAutomaticallyFromInline = true   // 홈 스와이프 시 자동 PiP
 ```
 
-- 지원 iPad 모델이 한정되므로 **반드시 런타임에 `isMultitaskingAccessSupported`로 확인**한다.
+- 지원 iPad 모델이 한정되므로 **반드시 런타임에 `isMultitaskingCameraAccessSupported`로 확인**한다.
 - 미지원 기기는 `SCREEN_OFF`와 동일하게 **오디오만 유지**로 폴백한다.
 
-**LiveKit Swift SDK 2.16.0 소스 확인 결과 (2026-08-06).** 당초 이 항목을 프로젝트 최대 리스크로 잡았으나, 필요한 것이 모두 **공개 API로 이미 제공된다**:
+### 5.2.1 iOS PiP용 렌더러는 직접 구현한다
 
-| 필요한 것 | 제공 여부 | 위치 |
-|---|---|---|
-| `AVCaptureSession` 접근 | 제공 — `CameraCapturer.captureSession` (public) | `Track/Capturers/CameraCapturer.swift:91` |
-| iPad 멀티태스킹 카메라 접근 | 제공 — `isMultitaskingAccessSupported` / `isMultitaskingAccessEnabled` (getter+setter) | 같은 파일 `:52`, `:63` |
-| PiP용 `AVSampleBufferDisplayLayer` | 제공 — `VideoView.avSampleBufferDisplayLayer` (public) | `Views/VideoView.swift:231` |
-| 해당 렌더러 선택 | 제공 — `VideoView.renderMode = .sampleBuffer` | `Views/VideoView.swift:57-61` |
+raw libwebrtc의 iOS 렌더러는 `RTCMTLVideoView`(Metal)뿐이고, `AVPictureInPictureController`가 요구하는 `AVSampleBufferDisplayLayer`를 내주지 않는다. 따라서 다음을 직접 만든다:
 
-SDK 포크나 커스텀 `VideoCapturer` 구현은 **필요 없다.** 남은 iOS 작업은 `AVPictureInPictureController`를 그 레이어에 연결하는 앱 측 배선뿐이다.
+```
+RTCVideoRenderer 구현체
+  renderFrame(RTCVideoFrame)
+    -> frame.buffer 에서 CVPixelBuffer 추출
+    -> CMSampleBuffer 로 감싸기
+    -> AVSampleBufferDisplayLayer.enqueue()
+```
 
-### 5.2.1 raw WebRTC 직접 구현 대안을 기각한 근거
+`RTCVideoFrame.buffer`가 `RTCCVPixelBuffer`가 아닌 I420 계열로 오는 경우 변환이 필요하다. 실제 버퍼 타입은 구현 시 확인한다.
 
-LiveKit을 걷어내고 libwebrtc로 P2P를 직접 구현하는 안을 검토했다. 유일한 결정적 장점은 `AVCaptureSession`을 온전히 소유해 iPad 카메라 유지를 SDK 사정과 무관하게 보장할 수 있다는 점이었는데, 위 확인으로 그 장점이 사라졌다.
-
-반면 raw WebRTC를 택하면 다음을 전부 직접 만들어야 한다: **시그널링 서버**(WebRTC에 포함되지 않음), **TURN 운영**(어차피 필요하므로 절감 없음), **재연결과 ICE restart**, **WiFi↔LTE 전환 처리**, **대역폭 적응**, **오디오 라우팅·기기 관리**(Android/iOS 각각).
-
-10분 수업에서 1분 끊기면 수업의 10%가 날아간다. 아이 태블릿은 네트워크 전환이 잦은 환경이고, 재연결은 raw WebRTC에서 가장 손이 많이 가면서 가장 자주 실패하는 영역이다. 그 부분을 검증된 구현에서 자체 구현으로 바꾸는 것은 손해다. **SFU 경유로 남는 대역폭 비용(약 2.7 Gbps)이 그 대가로 지불할 가치가 있다.**
+> **참고 — SFU로 전환하면 이 작업이 사라진다.** LiveKit Swift SDK 2.16.0은 같은 것을 이미 공개 API로 제공한다(`VideoView.renderMode = .sampleBuffer` → `VideoView.avSampleBufferDisplayLayer`, `Views/VideoView.swift:231`). 카메라 쪽도 `CameraCapturer.isMultitaskingAccessEnabled` 로 감싸 놓았다(`Track/Capturers/CameraCapturer.swift:63`). §2.3의 SFU 재검토 시 iOS 구현 부담 감소분으로 계산에 넣는다.
 
 ### 5.3 다른 앱 사용 차단
 
@@ -292,9 +346,9 @@ BYOD(개인 소유 기기)이므로 Device Owner 키오스크 모드는 사용�
 
 ```
 CameraArbiter  (KMP expect/actual)
-  요청자: VIDEO_CLASS(LiveKit) | STUDY_CAPTURE(학습 활동)
+  요청자: VIDEO_CLASS(WebRTC 송출) | STUDY_CAPTURE(학습 활동)
   상태:   FRONT_CLASS / BACK_SHARED / CAPTURE_PAUSED / DUAL
-  상태 전이 시 → LiveKit DataChannel로 선생님에게 브로드캐스트
+  상태 전이 시 → WebRTC DataChannel로 선생님에게 브로드캐스트
 ```
 
 ### 6.1 동작 모드 (기기 능력에 따라 자동 폴백)
@@ -412,7 +466,7 @@ PIP 진입 시에는 **선생님 원격 영상만** 렌더한다. 학습 화면�
 | 기능 | 검증 대상 |
 |---|---|
 | 책 지면 이미지 뷰어 + 페이지 넘김 | 학습 화면 자리 확보 |
-| **선생님-아이 페이지 동기화** | LiveKit DataChannel |
+| **선생님-아이 페이지 동기화** | WebRTC DataChannel (P2P 직결) |
 | **선생님 포인터** (선생님이 짚으면 아이 화면에 원 표시) | DataChannel 실시간성 |
 | **📷 사진 찍기 버튼** | Camera Arbiter 전 경로 |
 | 간단 퀴즈 1개 | 학습 상호작용 자리 확보 |
@@ -445,19 +499,21 @@ PIP 진입 시에는 **선생님 원격 영상만** 렌더한다. 학습 화면�
               · PermissionController · AppLockController
 
 :androidApp
-   actual = LiveKit Android SDK, Activity PIP, ForegroundService(camera|microphone),
+   actual = libwebrtc(Android), Activity PIP, ForegroundService(camera|microphone),
             startLockTask(화면 고정), CameraX
 
 :iosApp (Swift)
-   actual = LiveKit Swift SDK, AVPictureInPictureController,
+   actual = libwebrtc(iOS), 자체 SampleBuffer 렌더러, AVPictureInPictureController,
             AVCaptureSession(isMultitaskingCameraAccessEnabled), AVAudioSession
 ```
 
 ### 10.1 알려진 제약
 
-**LiveKit Swift SDK는 Swift 전용이라 Kotlin/Native가 직접 소비할 수 없다** (cinterop은 Objective-C까지만 지원). 해결 방법은 KMP 표준 패턴을 따른다: `:shared`에 Kotlin `interface`를 정의하고, Swift 쪽에서 이를 구현한 뒤 앱 시작 시 주입한다.
+libwebrtc의 iOS 배포물은 Objective-C 헤더를 노출하므로 Kotlin/Native cinterop으로 직접 소비하는 것이 이론상 가능하다. 그러나 PiP 렌더러, `AVCaptureSession` 제어, 오디오 세션 관리는 Swift로 짜는 편이 현실적이다. 따라서 KMP 표준 패턴을 따른다: `:shared`에 Kotlin `interface`(`VideoEngine` 등)를 정의하고, Swift 쪽에서 이를 구현한 뒤 앱 시작 시 주입한다.
 
-이로 인해 **iOS에는 상당량의 Swift 네이티브 코드가 발생**한다(PiP 구현 + 카메라 세션 관리 + LiveKit 래핑). "KMP를 쓰니 iOS는 공짜"가 아니라는 점을 일정 산정에 반영한다. (합의 완료)
+이로 인해 **iOS에는 상당량의 Swift 네이티브 코드가 발생**한다(PiP 렌더러 자체 구현 + 카메라 세션 관리 + libwebrtc 래핑 + 시그널링 클라이언트). "KMP를 쓰니 iOS는 공짜"가 아니라는 점을 일정 산정에 반영한다. (합의 완료)
+
+**`VideoEngine` 인터페이스가 이 설계에서 가장 중요한 이음매다.** §2.3에 따라 후속 과제로 SFU 전환을 검토하게 되면, 교체 범위가 이 인터페이스의 `actual` 구현으로 한정되어야 한다. 도메인 상태머신·UI·카메라 중재·학습 화면은 엔진 종류를 몰라야 한다. 시그널링 프로토콜도 이 인터페이스 안쪽에 감춘다.
 
 ### 10.2 북클럽 이식 대비
 
@@ -481,25 +537,32 @@ PIP 진입 시에는 **선생님 원격 영상만** 렌더한다. 학습 화면�
 
 | # | 검증 항목 | 상태 | 실패 시 대응 |
 |---|---|---|---|
-| 1 | **iPad에서 `isMultitaskingAccessEnabled`로 PiP 중 카메라 유지**. 여러 세대 실기기 필요 | 미검증 — iPad 필요 | iPad는 오디오만 유지로 확정 |
-| 2 | **Android 14/15/16에서 PIP + FGS(camera) 동작**. 삼성 태블릿 OEM 차이 포함 | 미검증 — 태블릿 필요. 스파이크 코드는 완성 | PIP 정책 재설계 |
-| 3 | ~~LiveKit Swift SDK 위 PiP 직접 구현 난이도~~ | **해소됨 (2026-08-06)** — §5.2 참조. 필요한 API가 전부 공개 제공됨 | — |
-| 4 | 동시 3,000방 부하 | 미검증 | 노드 증설 / 화질 하향 |
+| 1 | **iPad에서 `isMultitaskingCameraAccessEnabled`로 PiP 중 카메라 유지**. 여러 세대 실기기 필요 | 미검증 — iPad 필요 | iPad는 오디오만 유지로 확정 |
+| 2 | **Android 14/15/16에서 PIP + FGS(camera) 동작**. 삼성 태블릿 OEM 차이 포함 | 미검증 — 태블릿 필요. LiveKit 기반 스파이크 코드는 완성 | PIP 정책 재설계 |
+| 3 | ~~LiveKit Swift SDK 위 PiP 직접 구현 난이도~~ | **해소됨** — 필요한 API가 전부 공개 제공됨. 단 §2.3의 P2P 결정으로 **현재는 해당 없음** | — |
+| 4 | ~~동시 3,000방 SFU 부하~~ | **해당 없음** — P2P로 전환. 대신 항목 6·7로 대체 | — |
 | 5 | **포그라운드 서비스가 실제로 필요한지** — PIP는 visible 상태라 FGS 없이도 카메라가 유지될 수 있다. FGS를 제거한 빌드로 대조 측정해야 §5.1의 전제가 검증된다 | 미검증 | FGS 불필요로 판명되면 §5.1 단순화 |
+| 6 | **TURN 릴레이 비율 실측** — P2P 경제성 전체가 여기 달려 있다. 아동 태블릿은 CGNAT·학교 와이파이 비중이 높아 일반 인터넷보다 높을 수 있다 | 미검증 | 30% 초과 시 §2.3에 따라 SFU 재검토 |
+| 7 | **재연결·ICE restart·WiFi↔LTE 전환 자체 구현 난이도** | 미검증 | 일정 재산정. 실패 시 SFU 조기 전환 |
+| 8 | **iOS PiP용 `AVSampleBufferDisplayLayer` 렌더러 직접 구현** (§5.2.1) | 미검증 | SFU 전환 시 사라지는 작업이므로 전환 시점 앞당김 |
 
 > 항목 5는 Phase 0 계획을 쓸 때 빠뜨렸다가 최종 리뷰에서 드러났다. 항목 2가 통과해도 그것이 "FGS 덕분"이라는 증거는 아니다.
+>
+> **항목 6·7·8은 §2.3의 P2P 결정으로 새로 생긴 리스크다.** 셋 다 SFU를 택하면 존재하지 않았을 항목이며, 이것이 P2P를 택하며 감수하기로 한 비용이다.
+>
+> ⚠️ **기존 Phase 0 스파이크는 LiveKit SDK 기반으로 작성되어 있다.** P2P 결정 이후에도 "PIP에서 카메라가 사는가"라는 OS 차원 질문에는 여전히 유효하다 — LiveKit Android는 내부적으로 libwebrtc의 `Camera2Capturer`를 쓰므로 캡처 라이프사이클이 같다. 다만 raw libwebrtc로 다시 확인하는 편이 안전하며, 그 판단은 항목 2 측정 후에 한다.
 
 ### 11.2 Phase 계획
 
 | Phase | 내용 |
 |---|---|
 | 0 | PoC 스파이크 (§11.1) |
-| 1 | KMP 골격 + LiveKit 1:1 통화 |
+| 1 | KMP 골격 + 시그널링 서버 + P2P 1:1 통화 |
 | 2 | PIP + 이탈 감지 + 선생님 실시간 통보 |
 | 3 | 리허설 온보딩 + 대기실 |
 | 4 | Camera Arbiter + 사진 촬영 |
 | 5 | 학습화면 가안 + DataChannel |
-| 6 | 부하 테스트 + 셀프호스팅 인프라 구축 |
+| 6 | TURN 운영 + 릴레이 비율 실측 + 재연결 강화 |
 
 ---
 
@@ -519,10 +582,10 @@ PIP 진입 시에는 **선생님 원격 영상만** 렌더한다. 학습 화면�
 
 | 항목 | 결정 |
 |---|---|
-| 화상 솔루션 | **LiveKit** (구루미 배제 — WebView 전용이라 iOS PIP 불가) |
-| 미디어 토폴로지 | **SFU** (P2P 미채택) |
-| 호스팅 | PoC는 LiveKit Cloud, 운영은 **국내 셀프호스팅** |
-| 화질 | 기본 360p, 상한 480p |
+| 화상 솔루션 | **raw libwebrtc** (구루미 배제 — WebView 전용이라 iOS PIP 불가) |
+| 미디어 토폴로지 | **P2P 직결** (1:1 고정. SFU/LiveKit은 후속 과제 — §2.3) |
+| 호스팅 | 시그널링 서버 + **TURN(국내 정액 대역폭)**. SFU 클러스터 없음 |
+| 화질 | 기본 **270p**, 상한 360p |
 | 앱 스택 | **KMP + Compose Multiplatform**, Android 태블릿 / iPad |
 | 화면 방향 | 가로 고정 |
 | 이탈 정책 | **C안** — 화상 유지 + 이탈 가시화 + 복귀 압박 |
