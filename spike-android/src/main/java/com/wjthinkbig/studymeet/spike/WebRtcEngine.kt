@@ -39,6 +39,7 @@ class WebRtcEngine(
     private var videoSource: VideoSource? = null
     private var surfaceHelper: SurfaceTextureHelper? = null
     private var localTrack: VideoTrack? = null
+    @Volatile
     private var peerConnection: PeerConnection? = null
     private val candidateLock = Any()
     private var remoteDescriptionSet = false
@@ -220,21 +221,27 @@ class WebRtcEngine(
 
     /** 원격 description이 적용된 뒤에만 후보를 넣을 수 있다. 그 전에 온 것은 모아 두었다 흘려보낸다. */
     private fun queueOrAddCandidate(pc: PeerConnection, candidate: IceCandidate) {
-        synchronized(candidateLock) {
+        val addNow = synchronized(candidateLock) {
             if (remoteDescriptionSet) {
-                addCandidateLogged(pc, candidate)
+                true
             } else {
                 pendingCandidates.add(candidate)
+                false
             }
         }
+        // 네이티브 호출은 락 밖에서 한다. addIceCandidate는 libwebrtc 시그널링 스레드를
+        // 블로킹하는데, flushPendingCandidates를 부르는 onSetSuccess도 같은 스레드에서 온다.
+        if (addNow) addCandidateLogged(pc, candidate)
     }
 
     private fun flushPendingCandidates(pc: PeerConnection) {
-        synchronized(candidateLock) {
+        val drained = synchronized(candidateLock) {
             remoteDescriptionSet = true
-            pendingCandidates.forEach { addCandidateLogged(pc, it) }
+            val copy = pendingCandidates.toList()
             pendingCandidates.clear()
+            copy
         }
+        drained.forEach { addCandidateLogged(pc, it) }
     }
 
     /**
