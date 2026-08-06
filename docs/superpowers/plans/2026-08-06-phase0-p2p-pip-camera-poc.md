@@ -909,15 +909,68 @@ import org.webrtc.SessionDescription
                 SimpleSdpObserver(),
                 SessionDescription(SessionDescription.Type.ANSWER, json.getString("sdp")),
             )
-            "candidate" -> pc.addIceCandidate(
+            "candidate" -> queueOrAddCandidate(
+                pc,
                 IceCandidate(
                     json.getString("sdpMid"),
                     json.getInt("sdpMLineIndex"),
                     json.getString("candidate"),
-                )
+                ),
             )
         }
     }
+```
+
+**두 `setRemoteDescription` 호출은 성공 시 버퍼를 흘려보내야 한다.** 맨 `SimpleSdpObserver()` 대신 다음을 넘긴다 (offer/answer 양쪽 동일, `Type` 만 다름):
+
+```kotlin
+                    object : SimpleSdpObserver() {
+                        override fun onSetSuccess() {
+                            flushPendingCandidates(pc)
+                        }
+                    },
+```
+
+그리고 클래스에 다음을 추가한다. **이것이 없으면 원격 description 적용 전에 도착한 ICE 후보가 조용히 버려지고, 그 결과가 Task 6의 릴레이 비율 측정에서 실제 NAT 실패와 구분되지 않는다.**
+
+```kotlin
+    private val candidateLock = Any()
+    private var remoteDescriptionSet = false
+    private val pendingCandidates = mutableListOf<IceCandidate>()
+
+    private fun queueOrAddCandidate(pc: PeerConnection, candidate: IceCandidate) {
+        synchronized(candidateLock) {
+            if (remoteDescriptionSet) {
+                addCandidateLogged(pc, candidate)
+            } else {
+                pendingCandidates.add(candidate)
+            }
+        }
+    }
+
+    private fun flushPendingCandidates(pc: PeerConnection) {
+        synchronized(candidateLock) {
+            remoteDescriptionSet = true
+            pendingCandidates.forEach { addCandidateLogged(pc, it) }
+            pendingCandidates.clear()
+        }
+    }
+
+    /** 거부된 후보는 조용히 사라지면 안 된다. 측정에서 구현 결함과 실제 NAT 실패가 뒤섞인다. */
+    private fun addCandidateLogged(pc: PeerConnection, candidate: IceCandidate) {
+        if (!pc.addIceCandidate(candidate)) {
+            android.util.Log.w("PipSpike", "addIceCandidate rejected: ${candidate.sdp}")
+        }
+    }
+```
+
+`release()` 에서도 버퍼를 비운다:
+
+```kotlin
+        synchronized(candidateLock) {
+            pendingCandidates.clear()
+            remoteDescriptionSet = false
+        }
 ```
 
 같은 파일 끝에 다음을 추가한다:
