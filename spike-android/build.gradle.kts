@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.material)
     implementation(libs.webrtc.android)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.okhttp)
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.test.rules)

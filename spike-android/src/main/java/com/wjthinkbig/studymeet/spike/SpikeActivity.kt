@@ -45,6 +45,8 @@ class SpikeActivity : AppCompatActivity() {
     /** PIP는 카메라가 살아난 뒤에만 의미가 있다. 권한 다이얼로그가 뜰 때도 onUserLeaveHint가 불린다. */
     private var isStarted = false
 
+    private var signalingRef: SignalingClient? = null
+
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: AndroidIntent?) {
             when (intent?.action) {
@@ -119,6 +121,28 @@ class SpikeActivity : AppCompatActivity() {
         }
         isStarted = true
         statusText.text = "카메라 동작 중"
+
+        if (BuildConfig.SIGNALING_URL.isBlank()) {
+            statusText.text = "카메라 동작 중 (시그널링 없음)"
+            return
+        }
+
+        val isCaller = BuildConfig.SIGNALING_URL.contains("role=caller")
+        val signaling = SignalingClient(
+            url = BuildConfig.SIGNALING_URL,
+            onReady = {
+                runOnUiThread { statusText.text = "상대 입장. 협상 시작" }
+                engine.connectPeer(
+                    isCaller = isCaller,
+                    signaling = signalingRef!!,
+                    remoteSinks = listOf(remoteFrames, remoteRenderer),
+                )
+            },
+            onMessage = { json -> engine.handleSignal(json, signalingRef!!) },
+            onPeerLeft = { runOnUiThread { statusText.text = "상대 나감" } },
+        )
+        signalingRef = signaling
+        signaling.connect()
     }
 
     /** PIP 진입. 성공하면 true. */
@@ -147,6 +171,7 @@ class SpikeActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         unregisterReceiver(screenReceiver)
+        signalingRef?.close()
         engine.release()
         localRenderer.release()
         remoteRenderer.release()
