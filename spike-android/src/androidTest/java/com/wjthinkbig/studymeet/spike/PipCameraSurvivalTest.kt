@@ -24,6 +24,9 @@ class PipCameraSurvivalTest {
 
     @Test
     fun cameraKeepsProducingFramesWhileInPictureInPicture() {
+        // 카운터는 프로세스 수명 싱글턴이다. 재시도로 프로세스가 재사용되면
+        // 이전 실행의 값이 남아 "카메라 시작됨" 대기를 즉시 통과시킨다.
+        SpikeActivity.localFrames.reset()
         ActivityScenario.launch(SpikeActivity::class.java).use { scenario ->
 
             // 1. 카메라 프레임이 흐르기 시작할 때까지 기다린다.
