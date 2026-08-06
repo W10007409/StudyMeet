@@ -1,0 +1,4 @@
+int id localRenderer 0x0
+int id remoteRenderer 0x0
+int id statusText 0x0
+int layout activity_spike 0x0

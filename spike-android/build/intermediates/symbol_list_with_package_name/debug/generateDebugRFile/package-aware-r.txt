@@ -1,0 +1,5 @@
+com.wjthinkbig.studymeet.spike
+id localRenderer
+id remoteRenderer
+id statusText
+layout activity_spike
