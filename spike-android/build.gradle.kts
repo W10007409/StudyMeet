@@ -30,6 +30,11 @@ android {
             "SIGNALING_URL",
             "\"${localProps.getProperty("signaling.url") ?: ""}\""
         )
+        buildConfigField(
+            "boolean",
+            "USE_FOREGROUND_SERVICE",
+            (localProps.getProperty("spike.useForegroundService") ?: "true")
+        )
     }
 
     buildFeatures {

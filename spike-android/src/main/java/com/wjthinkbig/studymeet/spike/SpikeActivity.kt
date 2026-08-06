@@ -105,11 +105,15 @@ class SpikeActivity : AppCompatActivity() {
         localFrames.reset()
         remoteFrames.reset()
 
-        ClassForegroundService.start(this)
+        if (BuildConfig.USE_FOREGROUND_SERVICE) {
+            ClassForegroundService.start(this)
+        }
 
         val ok = engine.startLocalCamera(sink = localFrames, preview = localRenderer)
         if (!ok) {
-            ClassForegroundService.stop(this)
+            if (BuildConfig.USE_FOREGROUND_SERVICE) {
+                ClassForegroundService.stop(this)
+            }
             statusText.text = "카메라 시작 실패"
             return
         }
@@ -147,7 +151,9 @@ class SpikeActivity : AppCompatActivity() {
         localRenderer.release()
         remoteRenderer.release()
         eglBase.release()
-        ClassForegroundService.stop(this)
+        if (BuildConfig.USE_FOREGROUND_SERVICE) {
+            ClassForegroundService.stop(this)
+        }
         super.onDestroy()
     }
 }
