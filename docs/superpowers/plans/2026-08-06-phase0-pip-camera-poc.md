@@ -10,6 +10,21 @@
 
 ---
 
+## 실행 상태 (2026-08-06 기준)
+
+| 파트 | 상태 | 막힌 이유 |
+|---|---|---|
+| Task 1 | **부분 완료** — Step 1(기존 빌드 검증), Step 7(결과 파일 생성) 완료. Step 2~6(LiveKit Cloud 계정·토큰) 미완 | 웹 가입이 필요한 사람 작업 |
+| Task 2~6 (Android) | **코드 완료, 실기기 검증 미완** — 모듈·FGS·PIP·계측 테스트·화면꺼짐 처리 모두 작성되고 컴파일 통과 | Android 태블릿 실기기 없음 |
+| Task 7~11 (iPad) | **미착수** | macOS + Xcode + iPad 실기기 없음 |
+| Task 12 (결과 판정) | **미착수** | 측정값이 아직 하나도 없음 |
+
+**측정값은 아직 0건이다.** `docs/superpowers/specs/phase0-poc-results.md` 의 모든 표가 비어 있고, 그 상태가 정확하다. Phase 1 착수 가부는 그 표가 채워지기 전에는 판단할 수 없다.
+
+하드웨어가 확보되면 재개 순서: Task 1 Step 2~6 → Task 5 Step 2~3 → Task 6 Step 3~4 → (macOS 확보 시) Task 7~11 → Task 12.
+
+---
+
 ## Global Constraints
 
 - Android `minSdk = 26`, `targetSdk = 36`, `compileSdk = release(36) { minorApiLevel = 1 }` — 기존 `app` 모듈과 동일하게 맞춘다.
@@ -900,10 +915,22 @@ class PipCameraSurvivalTest {
 
 - [ ] **Step 2: 테스트를 실행해 현재 상태를 확인**
 
+**사전 조건 — 빠뜨리면 PIP 창이 검은 사각형으로만 보인다.** PIP 상태에서는 원격 영상만 렌더하므로, 방에 **두 번째 참가자**가 있어야 눈으로 확인할 것이 생긴다. 테스트 자체는 로컬 카메라만 재므로 참가자가 없어도 통과하지만, 육안 절차(Task 4 Step 3)가 무의미해진다. 테스트 시작 전에 같은 방에 하나 더 붙인다:
+
+```bash
+lk room join --url <URL> --api-key <API_KEY> --api-secret <API_SECRET> \
+  --identity observer --publish-demo phase0-spike
+```
+또는 LiveKit Cloud 대시보드의 샌드박스 Meet 앱으로 `phase0-spike` 방에 접속한다.
+
 태블릿을 연결한 상태에서:
 ```bash
-./gradlew :spike-android:connectedDebugAndroidTest --tests "*PipCameraSurvivalTest*"
+adb logcat -c
+./gradlew :spike-android:connectedDebugAndroidTest
+adb logcat -d -s PipSpike
 ```
+
+> 이 모듈에는 테스트가 하나뿐이라 필터를 걸지 않는다. `connectedDebugAndroidTest` 는 `DeviceProviderInstrumentTestTask` 라서 **`--tests` 옵션을 받지 않는다** (`--serial`, `--rerun` 만 지원). 굳이 필터가 필요하면 `-Pandroid.testInstrumentationRunnerArguments.class=com.wjthinkbig.studymeet.spike.PipCameraSurvivalTest` 를 쓴다.
 
 Expected: 다음 셋 중 하나가 나온다. **어느 쪽이든 PoC의 유효한 결과다.**
 
@@ -916,7 +943,9 @@ Expected: 다음 셋 중 하나가 나온다. **어느 쪽이든 PoC의 유효�
 `docs/superpowers/specs/phase0-poc-results.md` 의 "B. Android" 표에 이번 기기 행을 채운다. `PIP 중 프레임/3초` 열에는 테스트 출력의 `delta` 값을 그대로 적는다. 통과했으면 통과한 값을 적기 위해 다음을 실행한다:
 
 ```bash
-./gradlew :spike-android:connectedDebugAndroidTest --tests "*PipCameraSurvivalTest*" --info | findstr /i "delta before after"
+adb logcat -c
+./gradlew :spike-android:connectedDebugAndroidTest
+adb logcat -d -s PipSpike
 ```
 
 - [ ] **Step 4: 커밋**
@@ -1006,6 +1035,15 @@ adb shell am start -n com.wjthinkbig.studymeet.spike/.SpikeActivity
 ```
 접속 후 태블릿의 **전원 버튼**을 눌러 화면을 끈다. 5초 뒤 다시 켠다.
 
+**그리고 반드시 PIP 상태에서도 같은 확인을 반복한다.** 설계 §4.2가 `SCREEN_OFF` 를 정의한 이유가 바로 백그라운드/PIP 상황이고, OEM 차이가 가장 크게 갈리는 지점도 거기다. 전체 화면에서만 확인하면 정작 중요한 경우를 안 본 것이 된다:
+
+1. 접속 후 **홈 버튼**을 눌러 PIP 창으로 축소
+2. PIP 창이 떠 있는 상태에서 **전원 버튼**으로 화면 끄기
+3. 아래 `dumpsys media.camera` 로 카메라 클라이언트가 사라졌는지 확인
+4. 화면을 다시 켜고 카메라가 복귀하는지 확인
+
+두 경우(전체 화면 / PIP)의 결과를 결과 파일의 별도 열에 각각 적는다.
+
 프레임이 멈췄다 재개되는지는 다음으로 본다:
 ```bash
 adb shell dumpsys media.camera | findstr /i "com.wjthinkbig.studymeet.spike"
@@ -1020,7 +1058,7 @@ Android **14, 15, 16** 태블릿 각각에서 Task 5 Step 2의 테스트를 실�
 ```bash
 adb devices
 adb -s <시리얼> shell getprop ro.build.version.release
-./gradlew :spike-android:connectedDebugAndroidTest --tests "*PipCameraSurvivalTest*"
+./gradlew :spike-android:connectedDebugAndroidTest
 ```
 
 결과를 `docs/superpowers/specs/phase0-poc-results.md` 의 "B. Android" 표에 기기당 한 행씩 기록한다. `화면 꺼짐 시 카메라 중단` 열은 Step 3의 관찰 결과(`정상 중단` / `중단 안 됨`)를 적는다.
