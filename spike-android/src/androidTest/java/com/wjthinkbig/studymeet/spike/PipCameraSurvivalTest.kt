@@ -5,7 +5,6 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,18 +24,13 @@ class PipCameraSurvivalTest {
 
     @Test
     fun cameraKeepsProducingFramesWhileInPictureInPicture() {
-        assumeTrue(
-            "local.properties에 livekit.url / livekit.token.android 설정 필요",
-            BuildConfig.LIVEKIT_URL.isNotBlank() && BuildConfig.LIVEKIT_TOKEN.isNotBlank(),
-        )
-
         ActivityScenario.launch(SpikeActivity::class.java).use { scenario ->
 
-            // 1. 접속되어 카메라 프레임이 흐르기 시작할 때까지 기다린다.
-            val started = awaitUntil(timeoutMs = 30_000) {
+            // 1. 카메라 프레임이 흐르기 시작할 때까지 기다린다.
+            val started = awaitUntil(timeoutMs = 15_000) {
                 SpikeActivity.localFrames.snapshot() > 10
             }
-            assertTrue("30초 안에 카메라 프레임이 시작되지 않음", started)
+            assertTrue("15초 안에 카메라 프레임이 시작되지 않음", started)
 
             // 2. PIP로 진입한다.
             scenario.onActivity { it.enterPipNow() }
