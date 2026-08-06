@@ -29,3 +29,18 @@ Task 6: complete (commits 2c4c64f..8f8e97f, review clean after 3 fix passes)
 Tasks 7-11 (iOS/iPad): NOT STARTED - require macOS + Xcode + iPad hardware.
 Task 12 (results judgment): NOT STARTED - requires real measurements from
   Tasks 5/6 device runs and Task 11.
+
+=== PLAN CHANGED: P2P (635fae2) ===
+Design 2.3 switched to raw libwebrtc P2P; LiveKit/SFU deferred.
+New plan: docs/superpowers/plans/2026-08-06-phase0-p2p-pip-camera-poc.md
+Old plan archived as -livekit-superseded.md.
+Tasks 2-6 of the OLD plan stay valid as scaffolding (PIP, FGS, screen-off,
+frame counter are engine-agnostic); only the engine is swapped.
+Resuming at NEW Task 1.
+P2P Task 1: complete (commits 0174323..2c1627d, review clean after 1 fix pass)
+  Engine swapped to io.github.webrtc-sdk:android 144.7559.09 (org.webrtc.*).
+  Fixed: unguarded stopCapture on screen-off path; renderers released after
+  eglBase. Both bugs originated in the plan and were fixed there too.
+P2P Task 2: complete (commits abd4905..1fce828, review clean after 1 fix pass)
+  Instrumented test now runs unconditionally - no server, no credentials.
+  Tablet + 'adb logcat -d -s PipSpike' is all that is needed for the number.

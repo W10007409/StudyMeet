@@ -400,6 +400,12 @@ Modify `PipCameraSurvivalTest.kt`.
 
 `import org.junit.Assume.assumeTrue` 도 삭제한다.
 
+`ActivityScenario.launch(...)` 바로 위에 카운터 초기화를 넣는다. 카운터는 프로세스 수명 싱글턴이고 초기화가 프로덕션 코드(`startCamera()`)에서만 일어나므로, 테스트가 재시도되면 이전 실행의 값이 남아 "카메라 시작됨" 대기를 즉시 통과시킬 수 있다:
+
+```kotlin
+        SpikeActivity.localFrames.reset()
+```
+
 첫 대기의 타임아웃을 30초에서 15초로 줄인다. 네트워크 접속이 없어져 카메라 시작이 훨씬 빠르다.
 
 ```kotlin
