@@ -2,6 +2,10 @@ package com.wjthinkbig.studymeet.spike
 
 import android.Manifest
 import android.app.PictureInPictureParams
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent as AndroidIntent
+import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Rational
@@ -39,6 +43,21 @@ class SpikeActivity : AppCompatActivity() {
 
     /** PIP는 접속이 성립한 뒤에만 의미가 있다. 권한 다이얼로그가 뜰 때도 onUserLeaveHint가 불린다. */
     private var isConnected = false
+
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: AndroidIntent?) {
+            when (intent?.action) {
+                AndroidIntent.ACTION_SCREEN_OFF -> setCameraEnabled(false)
+                AndroidIntent.ACTION_SCREEN_ON -> setCameraEnabled(true)
+            }
+        }
+    }
+
+    private fun setCameraEnabled(enabled: Boolean) {
+        lifecycleScope.launch {
+            room.localParticipant.setCameraEnabled(enabled)
+        }
+    }
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
@@ -81,6 +100,14 @@ class SpikeActivity : AppCompatActivity() {
                 Manifest.permission.RECORD_AUDIO,
                 Manifest.permission.POST_NOTIFICATIONS,
             )
+        )
+
+        registerReceiver(
+            screenReceiver,
+            IntentFilter().apply {
+                addAction(AndroidIntent.ACTION_SCREEN_OFF)
+                addAction(AndroidIntent.ACTION_SCREEN_ON)
+            },
         )
     }
 
@@ -165,6 +192,7 @@ class SpikeActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        unregisterReceiver(screenReceiver)
         room.disconnect()
         ClassForegroundService.stop(this)
         super.onDestroy()
