@@ -144,14 +144,6 @@ class SpikeActivity : AppCompatActivity() {
                     room.localParticipant.setCameraEnabled(desiredCameraEnabled)
                 }
 
-                val local = room.localParticipant.getTrackPublication(
-                    io.livekit.android.room.track.Track.Source.CAMERA
-                )?.track as? LocalVideoTrack
-
-                local?.let {
-                    it.addRenderer(localRenderer)
-                    it.addRenderer(localFrames)
-                }
                 statusText.text = "접속됨"
                 isConnected = true
             } catch (e: Exception) {
@@ -169,6 +161,12 @@ class SpikeActivity : AppCompatActivity() {
                     (event.track as? VideoTrack)?.let {
                         it.addRenderer(remoteRenderer)
                         it.addRenderer(remoteFrames)
+                    }
+                }
+                is RoomEvent.TrackPublished -> {
+                    (event.publication.track as? LocalVideoTrack)?.let {
+                        it.addRenderer(localRenderer)
+                        it.addRenderer(localFrames)
                     }
                 }
                 is RoomEvent.Disconnected -> {
