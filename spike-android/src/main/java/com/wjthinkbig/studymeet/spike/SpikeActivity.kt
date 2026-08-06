@@ -91,6 +91,7 @@ class SpikeActivity : AppCompatActivity() {
 
             try {
                 statusText.text = "접속 중…"
+                ClassForegroundService.start(this@SpikeActivity)
                 room.connect(BuildConfig.LIVEKIT_URL, BuildConfig.LIVEKIT_TOKEN)
 
                 room.localParticipant.setMicrophoneEnabled(true)
@@ -128,6 +129,7 @@ class SpikeActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         room.disconnect()
+        ClassForegroundService.stop(this)
         super.onDestroy()
     }
 }

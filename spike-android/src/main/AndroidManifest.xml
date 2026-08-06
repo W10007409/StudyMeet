@@ -31,5 +31,10 @@
             </intent-filter>
         </activity>
 
+        <service
+            android:name=".ClassForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="camera|microphone" />
+
     </application>
 </manifest>
