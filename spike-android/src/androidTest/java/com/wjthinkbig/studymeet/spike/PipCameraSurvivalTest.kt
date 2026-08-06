@@ -20,7 +20,7 @@ class PipCameraSurvivalTest {
         Manifest.permission.POST_NOTIFICATIONS,
     )
 
-    /** 3초 동안 최소 이만큼의 프레임이 들어와야 카메라가 살아 있다고 본다. 24fps의 절반 수준. */
+    /** 3초 동안 최소 이만큼의 프레임이 들어와야 카메라가 살아 있다고 본다. 24fps 기준 72프레임의 약 40%. */
     private val minFramesIn3Seconds = 30
 
     @Test
@@ -53,6 +53,11 @@ class PipCameraSurvivalTest {
             Thread.sleep(3_000)
             val after = SpikeActivity.localFrames.snapshot()
             val delta = after - before
+
+            android.util.Log.i(
+                "PipSpike",
+                "PIP frames: before=$before after=$after delta=$delta",
+            )
 
             assertTrue(
                 "PIP 중 카메라 프레임이 멈춤. before=$before after=$after delta=$delta " +

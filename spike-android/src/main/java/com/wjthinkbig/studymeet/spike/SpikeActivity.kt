@@ -164,9 +164,11 @@ class SpikeActivity : AppCompatActivity() {
                     }
                 }
                 is RoomEvent.TrackPublished -> {
-                    (event.publication.track as? LocalVideoTrack)?.let {
-                        it.addRenderer(localRenderer)
-                        it.addRenderer(localFrames)
+                    if (event.publication.source == io.livekit.android.room.track.Track.Source.CAMERA) {
+                        (event.publication.track as? LocalVideoTrack)?.let {
+                            it.addRenderer(localRenderer)
+                            it.addRenderer(localFrames)
+                        }
                     }
                 }
                 is RoomEvent.Disconnected -> {
