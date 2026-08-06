@@ -27,13 +27,8 @@ android {
 
         buildConfigField(
             "String",
-            "LIVEKIT_URL",
-            "\"${localProps.getProperty("livekit.url") ?: ""}\""
-        )
-        buildConfigField(
-            "String",
-            "LIVEKIT_TOKEN",
-            "\"${localProps.getProperty("livekit.token.android") ?: ""}\""
+            "SIGNALING_URL",
+            "\"${localProps.getProperty("signaling.url") ?: ""}\""
         )
     }
 
@@ -51,7 +46,7 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
-    implementation(libs.livekit.android)
+    implementation(libs.webrtc.android)
     implementation(libs.kotlinx.coroutines.android)
 
     androidTestImplementation(libs.androidx.junit)

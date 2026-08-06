@@ -19,10 +19,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven {
-            url = uri("https://jitpack.io")
-            content { includeModule("com.github.davidliu", "audioswitch") }
-        }
     }
 }
 

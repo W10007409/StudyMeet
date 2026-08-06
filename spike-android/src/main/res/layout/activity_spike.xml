@@ -4,12 +4,12 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <io.livekit.android.renderer.SurfaceViewRenderer
+    <org.webrtc.SurfaceViewRenderer
         android:id="@+id/remoteRenderer"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <io.livekit.android.renderer.SurfaceViewRenderer
+    <org.webrtc.SurfaceViewRenderer
         android:id="@+id/localRenderer"
         android:layout_width="200dp"
         android:layout_height="150dp"

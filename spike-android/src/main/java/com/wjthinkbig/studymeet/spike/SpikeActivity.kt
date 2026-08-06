@@ -14,20 +14,11 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import io.livekit.android.LiveKit
-import io.livekit.android.RoomOptions
-import io.livekit.android.events.RoomEvent
-import io.livekit.android.events.collect
-import io.livekit.android.renderer.SurfaceViewRenderer
-import io.livekit.android.room.Room
-import io.livekit.android.room.track.CameraPosition
-import io.livekit.android.room.track.LocalVideoTrack
-import io.livekit.android.room.track.LocalVideoTrackOptions
-import io.livekit.android.room.track.VideoCaptureParameter
-import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.webrtc.EglBase
+import org.webrtc.SurfaceViewRenderer
 
 class SpikeActivity : AppCompatActivity() {
 
@@ -38,19 +29,21 @@ class SpikeActivity : AppCompatActivity() {
         val remoteFrames = FrameCounter("remote")
     }
 
-    private lateinit var room: Room
+    private lateinit var engine: WebRtcEngine
+    private val eglBase: EglBase = EglBase.create()
+
     private lateinit var remoteRenderer: SurfaceViewRenderer
     private lateinit var localRenderer: SurfaceViewRenderer
     private lateinit var statusText: TextView
-
-    /** PIP는 접속이 성립한 뒤에만 의미가 있다. 권한 다이얼로그가 뜰 때도 onUserLeaveHint가 불린다. */
-    private var isConnected = false
 
     /** 카메라 토글을 직렬화한다. 순서가 뒤집히면 화면이 꺼진 채 카메라가 켜질 수 있다. */
     private val cameraMutex = Mutex()
 
     @Volatile
     private var desiredCameraEnabled = true
+
+    /** PIP는 카메라가 살아난 뒤에만 의미가 있다. 권한 다이얼로그가 뜰 때도 onUserLeaveHint가 불린다. */
+    private var isStarted = false
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: AndroidIntent?) {
@@ -65,7 +58,7 @@ class SpikeActivity : AppCompatActivity() {
         desiredCameraEnabled = enabled
         lifecycleScope.launch {
             cameraMutex.withLock {
-                room.localParticipant.setCameraEnabled(desiredCameraEnabled)
+                engine.setCameraEnabled(desiredCameraEnabled)
             }
         }
     }
@@ -73,7 +66,7 @@ class SpikeActivity : AppCompatActivity() {
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             if (granted.values.all { it }) {
-                connect()
+                startCamera()
             } else {
                 statusText.text = "권한 거부됨"
             }
@@ -87,23 +80,9 @@ class SpikeActivity : AppCompatActivity() {
         localRenderer = findViewById(R.id.localRenderer)
         statusText = findViewById(R.id.statusText)
 
-        room = LiveKit.create(
-            appContext = applicationContext,
-            options = RoomOptions(
-                adaptiveStream = false,
-                dynacast = false,
-                videoTrackCaptureDefaults = LocalVideoTrackOptions(
-                    position = CameraPosition.FRONT,
-                    captureParams = VideoCaptureParameter(
-                        width = 640,
-                        height = 360,
-                        maxFps = 24,
-                    ),
-                ),
-            ),
-        )
-        room.initVideoRenderer(remoteRenderer)
-        room.initVideoRenderer(localRenderer)
+        engine = WebRtcEngine(applicationContext, eglBase)
+        remoteRenderer.init(eglBase.eglBaseContext, null)
+        localRenderer.init(eglBase.eglBaseContext, null)
 
         permissionLauncher.launch(
             arrayOf(
@@ -122,62 +101,20 @@ class SpikeActivity : AppCompatActivity() {
         )
     }
 
-    private fun connect() {
-        if (BuildConfig.LIVEKIT_URL.isBlank() || BuildConfig.LIVEKIT_TOKEN.isBlank()) {
-            statusText.text = "local.properties에 livekit.url / livekit.token.android 필요"
-            return
-        }
-
+    private fun startCamera() {
         localFrames.reset()
         remoteFrames.reset()
 
-        lifecycleScope.launch {
-            launch { observeEvents() }
+        ClassForegroundService.start(this)
 
-            try {
-                statusText.text = "접속 중…"
-                ClassForegroundService.start(this@SpikeActivity)
-                room.connect(BuildConfig.LIVEKIT_URL, BuildConfig.LIVEKIT_TOKEN)
-
-                room.localParticipant.setMicrophoneEnabled(true)
-                cameraMutex.withLock {
-                    room.localParticipant.setCameraEnabled(desiredCameraEnabled)
-                }
-
-                statusText.text = "접속됨"
-                isConnected = true
-            } catch (e: Exception) {
-                ClassForegroundService.stop(this@SpikeActivity)
-                isConnected = false
-                statusText.text = "접속 실패: ${e.message}"
-            }
+        val ok = engine.startLocalCamera(sink = localFrames, preview = localRenderer)
+        if (!ok) {
+            ClassForegroundService.stop(this)
+            statusText.text = "카메라 시작 실패"
+            return
         }
-    }
-
-    private suspend fun observeEvents() {
-        room.events.collect { event ->
-            when (event) {
-                is RoomEvent.TrackSubscribed -> {
-                    (event.track as? VideoTrack)?.let {
-                        it.addRenderer(remoteRenderer)
-                        it.addRenderer(remoteFrames)
-                    }
-                }
-                is RoomEvent.TrackPublished -> {
-                    if (event.publication.source == io.livekit.android.room.track.Track.Source.CAMERA) {
-                        (event.publication.track as? LocalVideoTrack)?.let {
-                            it.addRenderer(localRenderer)
-                            it.addRenderer(localFrames)
-                        }
-                    }
-                }
-                is RoomEvent.Disconnected -> {
-                    isConnected = false
-                    statusText.text = "연결 끊김"
-                }
-                else -> Unit
-            }
-        }
+        isStarted = true
+        statusText.text = "카메라 동작 중"
     }
 
     /** PIP 진입. 성공하면 true. */
@@ -190,7 +127,7 @@ class SpikeActivity : AppCompatActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (isConnected) enterPipNow()
+        if (isStarted) enterPipNow()
     }
 
     override fun onPictureInPictureModeChanged(
@@ -206,7 +143,8 @@ class SpikeActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         unregisterReceiver(screenReceiver)
-        room.disconnect()
+        engine.release()
+        eglBase.release()
         ClassForegroundService.stop(this)
         super.onDestroy()
     }
