@@ -231,7 +231,13 @@ class WebRtcEngine(
         if (enabled) {
             cam.startCapture(WIDTH, HEIGHT, FPS)
         } else {
-            cam.stopCapture()
+            // stopCapture는 InterruptedException을 던진다. 이 분기는 화면 꺼짐 브로드캐스트에서
+            // 코루틴을 타고 들어오므로, 잡지 않으면 측정 중에 Activity가 죽는다.
+            try {
+                cam.stopCapture()
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
         }
     }
 
@@ -335,6 +341,10 @@ import org.webrtc.SurfaceViewRenderer
     override fun onDestroy() {
         unregisterReceiver(screenReceiver)
         engine.release()
+        // 렌더러는 eglBase보다 먼저 해제한다. 각자 EGL 컨텍스트를 쥔 스레드를 돌리고 있어서,
+        // 순서가 뒤집히면 스레드가 새고 네이티브 EGL 오류가 난다.
+        localRenderer.release()
+        remoteRenderer.release()
         eglBase.release()
         ClassForegroundService.stop(this)
         super.onDestroy()
