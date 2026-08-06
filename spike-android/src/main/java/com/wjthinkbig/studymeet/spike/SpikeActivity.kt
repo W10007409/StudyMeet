@@ -107,6 +107,7 @@ class SpikeActivity : AppCompatActivity() {
                 }
                 statusText.text = "접속됨"
             } catch (e: Exception) {
+                ClassForegroundService.stop(this@SpikeActivity)
                 statusText.text = "접속 실패: ${e.message}"
             }
         }
