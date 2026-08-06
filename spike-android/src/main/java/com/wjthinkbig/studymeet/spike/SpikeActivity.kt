@@ -1,7 +1,11 @@
 package com.wjthinkbig.studymeet.spike
 
 import android.Manifest
+import android.app.PictureInPictureParams
+import android.content.res.Configuration
 import android.os.Bundle
+import android.util.Rational
+import android.view.View
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -126,6 +130,30 @@ class SpikeActivity : AppCompatActivity() {
                 else -> Unit
             }
         }
+    }
+
+    /** PIP 진입. 성공하면 true. */
+    fun enterPipNow(): Boolean {
+        val params = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(16, 9))
+            .build()
+        return enterPictureInPictureMode(params)
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        enterPipNow()
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        // PIP에서는 선생님 영상만 남긴다. 나머지는 숨긴다.
+        val hidden = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
+        localRenderer.visibility = hidden
+        statusText.visibility = hidden
     }
 
     override fun onDestroy() {
