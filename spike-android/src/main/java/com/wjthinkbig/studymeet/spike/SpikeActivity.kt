@@ -140,7 +140,9 @@ class SpikeActivity : AppCompatActivity() {
                 room.connect(BuildConfig.LIVEKIT_URL, BuildConfig.LIVEKIT_TOKEN)
 
                 room.localParticipant.setMicrophoneEnabled(true)
-                room.localParticipant.setCameraEnabled(true)
+                cameraMutex.withLock {
+                    room.localParticipant.setCameraEnabled(desiredCameraEnabled)
+                }
 
                 val local = room.localParticipant.getTrackPublication(
                     io.livekit.android.room.track.Track.Source.CAMERA
