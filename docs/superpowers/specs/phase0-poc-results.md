@@ -37,10 +37,10 @@
 
 ### C 전용 기록 항목
 
-- **Task 8 Step 2 판정** — LiveKit Swift SDK의 `AVCaptureSession` 접근 경로: (가) 공개 접근 가능 / (나) SDK 옵션 제공 / (다) 접근 불가
-  - → (다)이면 SDK 포크 또는 커스텀 `VideoCapturer` 필요. 설계와 일정에 큰 영향.
-- **Task 8 Step 5 판정** — `Multitasking Camera Access` 엔터틀먼트 필요 여부, Apple 별도 신청 필요 여부:
-- **Task 9 Step 1 판정** — `VideoFrame` 에서 `CVPixelBuffer` 를 얻는 실제 경로 / 버퍼 타입:
+- ~~**Task 8 Step 2** — LiveKit Swift SDK의 `AVCaptureSession` 접근 경로~~ → **소스 확인으로 해소됨 (2026-08-06).** `CameraCapturer.captureSession`, `isMultitaskingAccessSupported`, `isMultitaskingAccessEnabled` 모두 공개 API. SDK 포크 불필요.
+- ~~**Task 9 Step 1** — `VideoFrame` 에서 `CVPixelBuffer` 를 얻는 경로~~ → **불필요해짐.** `VideoView.renderMode = .sampleBuffer` 후 `VideoView.avSampleBufferDisplayLayer` 로 레이어를 직접 얻는다. 커스텀 렌더러 미작성.
+- **Task 8 Step 5 판정** — `Multitasking Camera Access` 엔터틀먼트 필요 여부, Apple 별도 신청 필요 여부: (실기기에서 확인)
+- **`capturer` 도달 경로** — `LocalVideoTrack` 에서 `CameraCapturer` 를 얻는 실제 프로퍼티 경로 (빌드하며 확정):
 
 ---
 
@@ -58,7 +58,9 @@ Task 12에서 결과를 과대해석하지 않도록 미리 적어 둔다.
 
 - [ ] Android: PIP 중 카메라 유지 확인됨 / 확인 실패 / 미검증
 - [ ] Android: 화면 꺼짐 시 카메라 중단 확인됨 / 확인 실패 / 미검증
+- [ ] Android: **FGS 제거 빌드 대조 측정** — 포그라운드 서비스가 실제로 필요함 / 없어도 유지됨 / 미검증
 - [ ] iPad: PiP 중 카메라 유지 확인됨 / 확인 실패 / 미검증
+- [x] iOS SDK 능력 확인 — **소스로 해소됨.** `AVCaptureSession` 접근과 PiP용 레이어 모두 LiveKit Swift 2.16.0의 공개 API. SDK 포크 불필요
 
 ## 설계 영향
 

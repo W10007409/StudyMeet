@@ -229,17 +229,40 @@ Info.plist  Background Modes: audio, voip
 
 AVAudioSession: category .playAndRecord, mode .videoChat
 
-원격 트랙 프레임 → AVSampleBufferDisplayLayer
+// 카메라 — iPad 멀티태스킹 접근
+if capturer.isMultitaskingAccessSupported {
+    capturer.isMultitaskingAccessEnabled = true
+}
+
+// PiP — 원격 영상 레이어
+videoView.renderMode = .sampleBuffer
+let layer = videoView.avSampleBufferDisplayLayer
 AVPictureInPictureController(
     contentSource: .init(activeVideoCallSourceView:contentViewController:))
 canStartPictureInPictureAutomaticallyFromInline = true   // 홈 스와이프 시 자동 PiP
-
-AVCaptureSession.isMultitaskingCameraAccessEnabled = true  // 지원 기기에서만
 ```
 
-- 지원 iPad 모델이 한정되므로 **반드시 런타임에 `isMultitaskingCameraAccessSupported`로 확인**한다.
+- 지원 iPad 모델이 한정되므로 **반드시 런타임에 `isMultitaskingAccessSupported`로 확인**한다.
 - 미지원 기기는 `SCREEN_OFF`와 동일하게 **오디오만 유지**로 폴백한다.
-- LiveKit Swift SDK는 PiP를 기본 제공하지 않는다. 위 경로를 직접 구현해야 한다.
+
+**LiveKit Swift SDK 2.16.0 소스 확인 결과 (2026-08-06).** 당초 이 항목을 프로젝트 최대 리스크로 잡았으나, 필요한 것이 모두 **공개 API로 이미 제공된다**:
+
+| 필요한 것 | 제공 여부 | 위치 |
+|---|---|---|
+| `AVCaptureSession` 접근 | 제공 — `CameraCapturer.captureSession` (public) | `Track/Capturers/CameraCapturer.swift:91` |
+| iPad 멀티태스킹 카메라 접근 | 제공 — `isMultitaskingAccessSupported` / `isMultitaskingAccessEnabled` (getter+setter) | 같은 파일 `:52`, `:63` |
+| PiP용 `AVSampleBufferDisplayLayer` | 제공 — `VideoView.avSampleBufferDisplayLayer` (public) | `Views/VideoView.swift:231` |
+| 해당 렌더러 선택 | 제공 — `VideoView.renderMode = .sampleBuffer` | `Views/VideoView.swift:57-61` |
+
+SDK 포크나 커스텀 `VideoCapturer` 구현은 **필요 없다.** 남은 iOS 작업은 `AVPictureInPictureController`를 그 레이어에 연결하는 앱 측 배선뿐이다.
+
+### 5.2.1 raw WebRTC 직접 구현 대안을 기각한 근거
+
+LiveKit을 걷어내고 libwebrtc로 P2P를 직접 구현하는 안을 검토했다. 유일한 결정적 장점은 `AVCaptureSession`을 온전히 소유해 iPad 카메라 유지를 SDK 사정과 무관하게 보장할 수 있다는 점이었는데, 위 확인으로 그 장점이 사라졌다.
+
+반면 raw WebRTC를 택하면 다음을 전부 직접 만들어야 한다: **시그널링 서버**(WebRTC에 포함되지 않음), **TURN 운영**(어차피 필요하므로 절감 없음), **재연결과 ICE restart**, **WiFi↔LTE 전환 처리**, **대역폭 적응**, **오디오 라우팅·기기 관리**(Android/iOS 각각).
+
+10분 수업에서 1분 끊기면 수업의 10%가 날아간다. 아이 태블릿은 네트워크 전환이 잦은 환경이고, 재연결은 raw WebRTC에서 가장 손이 많이 가면서 가장 자주 실패하는 영역이다. 그 부분을 검증된 구현에서 자체 구현으로 바꾸는 것은 손해다. **SFU 경유로 남는 대역폭 비용(약 2.7 Gbps)이 그 대가로 지불할 가치가 있다.**
 
 ### 5.3 다른 앱 사용 차단
 
@@ -456,12 +479,15 @@ PIP 진입 시에는 **선생님 원격 영상만** 렌더한다. 학습 화면�
 
 아래 항목이 깨지면 설계가 바뀐다. 다른 작업보다 먼저 검증한다.
 
-| # | 검증 항목 | 실패 시 대응 |
-|---|---|---|
-| 1 | **iPad에서 `isMultitaskingCameraAccessEnabled`로 PiP 중 카메라 유지**. 여러 세대 실기기 필요 | iPad는 오디오만 유지로 확정 |
-| 2 | **Android 14/15/16에서 PIP + FGS(camera) 동작**. 삼성 태블릿 OEM 차이 포함 | PIP 정책 재설계 |
-| 3 | **LiveKit Swift SDK 위 PiP 직접 구현** 난이도 | 일정 재산정 |
-| 4 | 동시 3,000방 부하 | 노드 증설 / 화질 하향 |
+| # | 검증 항목 | 상태 | 실패 시 대응 |
+|---|---|---|---|
+| 1 | **iPad에서 `isMultitaskingAccessEnabled`로 PiP 중 카메라 유지**. 여러 세대 실기기 필요 | 미검증 — iPad 필요 | iPad는 오디오만 유지로 확정 |
+| 2 | **Android 14/15/16에서 PIP + FGS(camera) 동작**. 삼성 태블릿 OEM 차이 포함 | 미검증 — 태블릿 필요. 스파이크 코드는 완성 | PIP 정책 재설계 |
+| 3 | ~~LiveKit Swift SDK 위 PiP 직접 구현 난이도~~ | **해소됨 (2026-08-06)** — §5.2 참조. 필요한 API가 전부 공개 제공됨 | — |
+| 4 | 동시 3,000방 부하 | 미검증 | 노드 증설 / 화질 하향 |
+| 5 | **포그라운드 서비스가 실제로 필요한지** — PIP는 visible 상태라 FGS 없이도 카메라가 유지될 수 있다. FGS를 제거한 빌드로 대조 측정해야 §5.1의 전제가 검증된다 | 미검증 | FGS 불필요로 판명되면 §5.1 단순화 |
+
+> 항목 5는 Phase 0 계획을 쓸 때 빠뜨렸다가 최종 리뷰에서 드러났다. 항목 2가 통과해도 그것이 "FGS 덕분"이라는 증거는 아니다.
 
 ### 11.2 Phase 계획
 

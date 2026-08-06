@@ -1345,9 +1345,21 @@ enum CameraCapability {
 }
 ```
 
-- [ ] **Step 2: LiveKit이 쓰는 `AVCaptureSession`에 접근할 수 있는지 확인**
+- [ ] **Step 2: ~~LiveKit이 쓰는 `AVCaptureSession`에 접근할 수 있는지 확인~~ — 해소됨 (2026-08-06)**
 
-이 스파이크의 핵심 미지수다. LiveKit Swift SDK는 내부적으로 카메라 캡처를 관리하므로, 그 `AVCaptureSession` 객체를 외부에서 얻을 수 있어야 위 유틸을 적용할 수 있다.
+> **이 단계는 더 이상 조사가 아니다.** LiveKit Swift SDK 2.16.0 소스를 확인한 결과, 필요한 것이 전부 공개 API로 제공된다:
+>
+> | 필요한 것 | SDK 제공 | 위치 |
+> |---|---|---|
+> | `AVCaptureSession` | `CameraCapturer.captureSession` | `Track/Capturers/CameraCapturer.swift:91` |
+> | 지원 여부 조회 | `CameraCapturer.isMultitaskingAccessSupported` | 같은 파일 `:52` |
+> | 활성화 (setter 있음) | `CameraCapturer.isMultitaskingAccessEnabled` | 같은 파일 `:63`, `:75` |
+>
+> 따라서 Step 1의 `CameraCapturer.swift` 유틸도 필요 없다. SDK의 프로퍼티를 직접 쓴다. 아래 (가)/(나)/(다) 분기 조사는 수행하지 않는다. **남은 일은 실기기에서 값이 실제로 `true`가 되는지 확인하는 것뿐이며, 그것은 Step 4다.**
+
+<details>
+<summary>원래의 조사 절차 (기록용, 수행하지 않음)</summary>
+
 
 Xcode 네비게이터에서 Package Dependencies → LiveKit → `Track/Local/CameraCapturer.swift` (또는 유사 이름)를 열고 다음을 확인해 기록한다:
 
@@ -1358,23 +1370,27 @@ Expected 결과는 셋 중 하나다. **어느 쪽인지 `phase0-poc-results.md`
 
 - **(가) 공개 접근 가능** → Step 3으로 진행
 - **(나) 비공개지만 SDK가 자체 옵션을 제공** (`CameraCaptureOptions` 등에 멀티태스킹 관련 필드) → 그 옵션을 쓰도록 Step 3을 수정
-- **(다) 접근 불가** → **LiveKit Swift SDK 포크 또는 커스텀 `VideoCapturer` 구현이 필요하다는 뜻이다. Phase 0의 중대 발견이므로 즉시 기록하고 Task 12에서 설계 영향으로 다룬다.**
+- **(다) 접근 불가** → **LiveKit Swift SDK 포크 또는 커스텀 `VideoCapturer` 구현이 필요하다는 뜻이다.**
+
+</details>
 
 - [ ] **Step 3: 접속 직후 멀티태스킹 접근을 켠다**
 
-Modify `spikes/ios-pip-spike/PipSpike/ClassViewController.swift` — `connect()` 안에서 `setCamera(enabled: true)` 호출 **직후**에 넣는다. `<세션 접근 경로>` 는 Step 2 (가)에서 확인한 실제 경로로 치환한다.
+Modify `spikes/ios-pip-spike/PipSpike/ClassViewController.swift` — `connect()` 안에서 `setCamera(enabled: true)` 호출 **직후**에 넣는다.
 
 ```swift
-            if let session = <세션 접근 경로> {
-                let supported = CameraCapability.isMultitaskingSupported(session: session)
-                let enabled = CameraCapability.enableMultitaskingAccess(on: session)
-                print("[PoC] multitaskingSupported=\(supported) enabled=\(enabled)")
+            if let capturer = room.localParticipant.firstCameraPublication?
+                .track?.capturer as? CameraCapturer {
+                let supported = capturer.isMultitaskingAccessSupported
+                if supported { capturer.isMultitaskingAccessEnabled = true }
+                print("[PoC] multitaskingSupported=\(supported) " +
+                      "enabled=\(capturer.isMultitaskingAccessEnabled)")
             } else {
-                print("[PoC] AVCaptureSession 접근 불가 — Step 2 (다) 경로")
+                print("[PoC] CameraCapturer를 얻지 못함")
             }
 ```
 
-Step 2가 (나)로 판명된 경우에는 위 블록 대신 SDK가 제공하는 옵션을 `setCamera` 호출에 넘기고, 같은 형식의 `print("[PoC] ...")` 로그를 남긴다.
+`LocalVideoTrack` 에서 `capturer` 에 도달하는 정확한 프로퍼티 경로는 SDK 버전에 따라 다를 수 있으니 빌드해서 확인하고, 다르면 실제 경로로 맞춘 뒤 보고한다. `isMultitaskingAccessSupported` / `isMultitaskingAccessEnabled` 두 이름 자체는 2.16.0 소스에서 확인된 것이므로 바꾸지 않는다.
 
 - [ ] **Step 4: 실기기에서 로그 확인**
 
@@ -1402,7 +1418,23 @@ git commit -m "spike(ios): detect and enable multitasking camera access"
 
 ### Task 9: 원격 영상을 AVSampleBufferDisplayLayer로 렌더
 
-iOS 화상통화 PiP는 `AVPictureInPictureController`가 요구하는 레이어에 원격 영상이 올라가 있어야 동작한다. LiveKit의 `VideoView`로는 PiP에 넘길 수 없다.
+iOS 화상통화 PiP는 `AVPictureInPictureController`가 요구하는 레이어에 원격 영상이 올라가 있어야 동작한다.
+
+> **범위 축소 (2026-08-06).** 당초 이 태스크는 커스텀 `VideoRenderer` 를 직접 구현해 프레임을 `AVSampleBufferDisplayLayer` 에 밀어넣는 것이었다. LiveKit Swift SDK 2.16.0 확인 결과 그럴 필요가 없다:
+>
+> ```swift
+> let videoView = VideoView()
+> videoView.renderMode = .sampleBuffer            // Views/VideoView.swift:57-61
+> // 원격 트랙을 videoView에 붙인 뒤
+> let layer = videoView.avSampleBufferDisplayLayer  // Views/VideoView.swift:231, public
+> ```
+>
+> `renderMode` 를 `.sampleBuffer` 로 지정하지 않으면 기본값 `.auto` 가 Metal 렌더러를 고르고, 그때 `avSampleBufferDisplayLayer` 는 `nil` 을 반환한다. **이 한 줄이 이 태스크의 핵심이다.**
+>
+> 따라서 아래 Step 1~2(프로토콜 조사 + 커스텀 렌더러 작성)는 **수행하지 않는다.** `SampleBufferRenderer.swift` 파일도 만들지 않는다. Step 3의 원격 트랙 연결만 `VideoView` 기준으로 수행하고, Task 10에서 그 레이어를 PiP에 넘긴다.
+
+<details>
+<summary>원래의 커스텀 렌더러 절차 (기록용, 수행하지 않음)</summary>
 
 **Files:**
 - Create: `spikes/ios-pip-spike/PipSpike/SampleBufferRenderer.swift`
@@ -1488,9 +1520,26 @@ final class SampleBufferRenderer: UIView, VideoRenderer {
 }
 ```
 
-`CVPixelVideoBuffer` 라는 타입명이 존재하지 않는다는 컴파일 오류가 나면 Step 1에서 확인한 실제 타입명으로 바꾼다. 프레임이 I420 계열이라 `CVPixelBuffer`를 직접 얻을 수 없으면, SDK가 제공하는 변환 메서드를 쓰고 그 사실을 결과 파일에 기록한다.
+`CVPixelVideoBuffer` 라는 타입명이 존재하지 않는다는 컴파일 오류가 나면 Step 1에서 확인한 실제 타입명으로 바꾼다.
 
-- [ ] **Step 3: 원격 트랙을 이 렌더러에 연결**
+</details>
+
+- [ ] **Step 3: 원격 트랙을 `VideoView`에 연결**
+
+`SampleBufferRenderer` 대신 SDK의 `VideoView` 를 쓴다. 클래스 프로퍼티:
+
+```swift
+    let remoteRenderer: VideoView = {
+        let view = VideoView()
+        view.renderMode = .sampleBuffer   // 이걸 빼면 avSampleBufferDisplayLayer가 nil이 된다
+        return view
+    }()
+```
+
+나머지(레이아웃 제약, `RoomDelegate` 로 원격 트랙 붙이기)는 아래 원문 그대로 하되, `track.add(videoRenderer: remoteRenderer)` 의 대상이 `VideoView` 라는 점만 다르다.
+
+<details>
+<summary>원문 (렌더러 타입만 VideoView로 치환해 사용)</summary>
 
 Modify `spikes/ios-pip-spike/PipSpike/ClassViewController.swift`.
 
@@ -1534,6 +1583,8 @@ extension ClassViewController: RoomDelegate {
 ```
 
 델리게이트 메서드명이 SDK 2.16.0과 다르면 Package Dependencies → LiveKit → `Core/RoomDelegate.swift` 에서 실제 시그니처를 확인해 맞춘다.
+
+</details>
 
 - [ ] **Step 4: 두 참가자로 원격 영상 확인**
 
