@@ -55,6 +55,8 @@ export function createStubApi(): StubApi {
 
     async endSession(sessionId, note, disconnectedSec) {
       api.lastEnd = { sessionId, note, disconnectedSec }
+      const target = sessions.find((s) => s.sessionId === sessionId)
+      if (target) target.status = 'ENDED'
     },
 
     async saveNote(sessionId, note) {

@@ -3,7 +3,7 @@ import type { TeacherApi } from '../api/client'
 import type { DataMessage, PageState, PresenceState, SessionSummary } from '../domain/types'
 import { applyPageSync, nextLocalPage } from '../domain/pageSync'
 import { accumulateDisconnected } from '../domain/presence'
-import { debounce } from '../domain/autosave'
+import { debounce, type Debounced } from '../domain/autosave'
 import { useSession } from '../webrtc/useSession'
 import { TopBar } from '../components/TopBar'
 import { BookViewer } from '../components/BookViewer'
@@ -27,9 +27,11 @@ export function Lesson({ api, session, onEnded }: {
   const startedAt = useRef(Date.now())
   const noteRef = useRef('')
   noteRef.current = note
-  const saveNote = useRef(
-    debounce((text: string) => { void api.saveNote(session.sessionId, text) }, 3000),
-  ).current
+  const saveNoteRef = useRef<Debounced<[string]> | null>(null)
+  if (saveNoteRef.current === null) {
+    saveNoteRef.current = debounce((text: string) => { void api.saveNote(session.sessionId, text) }, 3000)
+  }
+  const saveNote = saveNoteRef.current
   const pageRef = useRef<PageState>({ pageNo: 1, counter: 0, by: 'teacher' })
   pageRef.current = page
   const presenceRef = useRef<PresenceState>('IN_CLASS')

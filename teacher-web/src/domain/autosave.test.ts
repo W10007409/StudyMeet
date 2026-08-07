@@ -23,4 +23,27 @@ describe('debounce', () => {
     expect(fn).toHaveBeenCalledExactlyOnceWith('x')
     vi.useRealTimers()
   })
+
+  it('자연 발화 뒤의 flush 는 다시 보내지 않는다', () => {
+    vi.useFakeTimers()
+    const fn = vi.fn()
+    const d = debounce(fn, 3000)
+    d('x')
+    vi.advanceTimersByTime(3000)
+    expect(fn).toHaveBeenCalledTimes(1)
+    d.flush()
+    expect(fn).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it('연속 flush 는 한 번만 보낸다', () => {
+    vi.useFakeTimers()
+    const fn = vi.fn()
+    const d = debounce(fn, 3000)
+    d('y')
+    d.flush()
+    d.flush()
+    expect(fn).toHaveBeenCalledExactlyOnceWith('y')
+    vi.useRealTimers()
+  })
 })

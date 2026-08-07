@@ -15,12 +15,19 @@ export function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: numb
   const wrapped = ((...args: A) => {
     last = args
     if (timer) clearTimeout(timer)
-    timer = setTimeout(() => { timer = null; if (last) fn(...last) }, ms)
+    timer = setTimeout(() => {
+      const pending = last
+      timer = null
+      last = null
+      if (pending) fn(...pending)
+    }, ms)
   }) as Debounced<A>
 
   wrapped.flush = () => {
     if (timer) { clearTimeout(timer); timer = null }
-    if (last) fn(...last)
+    const pending = last
+    last = null
+    if (pending) fn(...pending)
   }
 
   return wrapped
