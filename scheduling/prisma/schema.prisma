@@ -26,7 +26,7 @@ model Enrollment {
   studentId     String
   teacherId     String
   bookTitle     String
-  membershipEnd DateTime?
+  membershipEnd DateTime?        @db.Timestamptz(3)
   creditBalance Int              @default(0)
   student       Student          @relation(fields: [studentId], references: [id])
   teacher       Teacher          @relation(fields: [teacherId], references: [id])
@@ -44,8 +44,8 @@ model RecurrenceRule {
   weekdays     Int[]
   /// 'HH:MM', 슬롯 그리드 위
   time         String
-  startsOn     DateTime
-  endsOn       DateTime?
+  startsOn     DateTime   @db.Timestamptz(3)
+  endsOn       DateTime?  @db.Timestamptz(3)
   enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
 }
 
@@ -62,14 +62,14 @@ model Session {
   id              String        @id @default(cuid())
   enrollmentId    String
   teacherId       String
-  scheduledAt     DateTime
+  scheduledAt     DateTime      @db.Timestamptz(3)
   durationMin     Int           @default(10)
   status          SessionStatus @default(SCHEDULED)
   /// 반복 규칙에서 생성됐는지, 추가 예약·보강인지
   isMakeup        Boolean       @default(false)
   note            String        @default("")
   disconnectedSec Int           @default(0)
-  endedAt         DateTime?
+  endedAt         DateTime?     @db.Timestamptz(3)
   enrollment      Enrollment    @relation(fields: [enrollmentId], references: [id])
   teacher         Teacher       @relation(fields: [teacherId], references: [id])
 
@@ -85,7 +85,7 @@ model CreditEntry {
   delta        Int
   reason       String
   sessionId    String?
-  createdAt    DateTime   @default(now())
+  createdAt    DateTime   @default(now()) @db.Timestamptz(3)
   enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
 }
 

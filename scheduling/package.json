@@ -11,12 +11,15 @@
     "db:generate": "prisma generate"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "7.9.1",
     "@prisma/client": "7.9.1",
     "fastify": "5.11.2",
+    "pg": "8.22.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "22.19.1",
+    "@types/pg": "8.20.4",
     "prisma": "7.9.1",
     "tsx": "4.23.10",
     "typescript": "7.0.2",
