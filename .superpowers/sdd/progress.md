@@ -77,3 +77,22 @@ P2P Task 7: complete (commit a3e32fb, review clean, no fix pass)
   reached connected / localType=host nominated=true. getUserMedia was stubbed
   (no camera on this box); everything below it ran the page's real code.
   Measurement now needs one tablet + a laptop, not two tablets.
+
+=== NEW PLAN: teacher-web (3457cb5) ===
+Plan: docs/superpowers/plans/2026-08-07-teacher-web-implementation.md
+Spec: docs/superpowers/specs/2026-08-07-teacher-lesson-screen-design.md
+7 tasks, no hardware blocker. Phase 0 teacher.html stands in as the peer.
+Starting at Task 1 (toolchain gate).
+teacher-web Task 1: complete (commit 6c58a3d, review clean)
+  TypeScript 7.0.2 VERIFIED working with vite 8 / vitest 4 / plugin-react 6.
+  Two plan defects found and fixed by the gate: @types pins tracked React's
+  version (they do not), and defineConfig came from 'vite' (no test field).
+teacher-web Task 2: complete (commits b1edc86..e1ff1f7, review clean, 1 fix pass)
+  Domain logic TDD: pageSync LWW, presence accounting, format, maskPhone.
+  Fix pinned the delta-vs-total contract on accumulateDisconnected - that
+  number is what a teacher reads when deciding to give a child extra time.
+teacher-web Task 3: complete (commit 1172dfe, review clean, no fix pass)
+  TeacherApi interface fixed + throwaway stub. Review caught that getToken
+  was defined but never consumed - Lesson.tsx read the signalling URL from
+  env instead. Plan corrected: connection info now comes from the backend
+  and useSession gained an enabled gate.

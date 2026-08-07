@@ -707,7 +707,7 @@ Phase 0의 `signaling/public/teacher.html` 을 React 훅으로 옮긴다. **미�
 
 **Interfaces:**
 - Consumes: `DataMessage` (Task 2), `TeacherApi.getToken` (Task 3)
-- Produces: `useSession({ room, role, onData })` → `{ localRef, remoteRef, iceState, connected, send, hangUp }`
+- Produces: `useSession({ signalingUrl, room, role, onData, enabled })` → `{ localRef, remoteRef, iceState, connected, send, hangUp }`. `enabled: false` 이면 카메라도 켜지 않고 소켓도 열지 않는다
 
 - [ ] **Step 1: 훅 작성**
 
@@ -722,11 +722,13 @@ interface Options {
   room: string
   role: 'caller' | 'callee'
   onData: (msg: DataMessage) => void
+  /** 접속 정보를 백엔드에서 받아오기 전에는 붙지 않는다. */
+  enabled: boolean
 }
 
 const CAPTURE = { width: 480, height: 270, frameRate: 24 }
 
-export function useSession({ signalingUrl, room, role, onData }: Options) {
+export function useSession({ signalingUrl, room, role, onData, enabled }: Options) {
   // 미디어 객체는 절대 state 에 넣지 않는다. 재렌더가 srcObject 를 흔들면 영상이 끊긴다.
   const localRef = useRef<HTMLVideoElement>(null)
   const remoteRef = useRef<HTMLVideoElement>(null)
@@ -760,6 +762,7 @@ export function useSession({ signalingUrl, room, role, onData }: Options) {
   }, [])
 
   useEffect(() => {
+    if (!enabled) return
     let cancelled = false
 
     const iceServers: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -850,7 +853,7 @@ export function useSession({ signalingUrl, room, role, onData }: Options) {
     })()
 
     return () => { cancelled = true; hangUp() }
-  }, [signalingUrl, room, role, hangUp])
+  }, [enabled, signalingUrl, room, role, hangUp])
 
   return { localRef, remoteRef, iceState, connected, send, hangUp }
 }
@@ -1197,11 +1200,19 @@ export function Lesson({ api, session, onEnded }: {
     }
   }, [])
 
+  // 접속 정보는 환경변수가 아니라 백엔드에서 받는다. 방 이름과 역할을 서버가 정해야
+  // 나중에 편성 시스템이 붙어도 화면이 안 바뀐다.
+  const [conn, setConn] = useState<{ signalingUrl: string; room: string; role: 'caller' | 'callee' } | null>(null)
+  useEffect(() => {
+    void api.getToken(session.sessionId).then(setConn)
+  }, [api, session.sessionId])
+
   const { localRef, remoteRef, send } = useSession({
-    signalingUrl: import.meta.env.VITE_SIGNALING_URL ?? 'ws://localhost:8080',
-    room: session.sessionId,
-    role: 'caller',
+    signalingUrl: conn?.signalingUrl ?? '',
+    room: conn?.room ?? '',
+    role: conn?.role ?? 'caller',
     onData,
+    enabled: conn !== null,
   })
 
   // 1초 틱 하나로 경과·이탈·누적 끊김을 모두 갱신한다.
