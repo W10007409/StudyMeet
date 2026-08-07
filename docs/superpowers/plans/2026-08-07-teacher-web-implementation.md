@@ -736,8 +736,6 @@ export function useSession({ signalingUrl, room, role, onData, enabled }: Option
   const wsRef = useRef<WebSocket | null>(null)
   const dcRef = useRef<RTCDataChannel | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
-  const remoteSetRef = useRef(false)
-  const pendingRef = useRef<RTCIceCandidate[]>([])
   const onDataRef = useRef(onData)
   onDataRef.current = onData
 
@@ -764,6 +762,11 @@ export function useSession({ signalingUrl, room, role, onData, enabled }: Option
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
+
+    // 연결마다 새로 시작한다. 훅 수명 ref 로 두면 이전 연결의 후보 버퍼와
+    // remoteSet 플래그가 다음 연결로 새어 들어간다.
+    let remoteSet = false
+    const pending: RTCIceCandidate[] = []
 
     const iceServers: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
     const turnUrl = import.meta.env.VITE_TURN_URL
@@ -795,9 +798,9 @@ export function useSession({ signalingUrl, room, role, onData, enabled }: Option
     }
 
     const flush = async () => {
-      remoteSetRef.current = true
-      while (pendingRef.current.length) {
-        const c = pendingRef.current.shift()!
+      remoteSet = true
+      while (pending.length) {
+        const c = pending.shift()!
         try { await pc.addIceCandidate(c) } catch { /* 거부된 후보는 무시한다 */ }
       }
     }
@@ -822,20 +825,30 @@ export function useSession({ signalingUrl, room, role, onData, enabled }: Option
         }))
       }
 
+      // 끊긴 뒤에도 이 핸들러는 계속 불린다. 매 await 뒤에 다시 확인하지 않으면
+      // 이미 닫힌 pc / ws 를 건드려 unhandled rejection 이 난다.
       ws.onmessage = async (ev) => {
+        if (cancelled) return
         const msg = JSON.parse(ev.data)
         if (msg.type === 'ready' && role === 'caller') {
           const offer = await pc.createOffer()
+          if (cancelled) return
           await pc.setLocalDescription(offer)
+          if (cancelled) return
           ws.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }))
         } else if (msg.type === 'offer') {
           await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp })
+          if (cancelled) return
           await flush()
+          if (cancelled) return
           const answer = await pc.createAnswer()
+          if (cancelled) return
           await pc.setLocalDescription(answer)
+          if (cancelled) return
           ws.send(JSON.stringify({ type: 'answer', sdp: answer.sdp }))
         } else if (msg.type === 'answer') {
           await pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp })
+          if (cancelled) return
           await flush()
         } else if (msg.type === 'candidate') {
           const c = new RTCIceCandidate({
@@ -843,10 +856,10 @@ export function useSession({ signalingUrl, room, role, onData, enabled }: Option
             sdpMid: msg.sdpMid,
             sdpMLineIndex: msg.sdpMLineIndex,
           })
-          if (remoteSetRef.current) {
+          if (remoteSet) {
             try { await pc.addIceCandidate(c) } catch { /* 무시 */ }
           } else {
-            pendingRef.current.push(c)
+            pending.push(c)
           }
         }
       }

@@ -96,3 +96,9 @@ teacher-web Task 3: complete (commit 1172dfe, review clean, no fix pass)
   was defined but never consumed - Lesson.tsx read the signalling URL from
   env instead. Plan corrected: connection info now comes from the backend
   and useSession gained an enabled gate.
+teacher-web Task 4: complete (commits b18f7da..2270405, review clean, 1 fix pass)
+  useSession hook. Fix: ICE candidate buffer and remoteSet flag were hook-
+  lifetime refs, so a torn-down connection leaked state into the next one;
+  and ws.onmessage kept running against a closed peer connection after
+  hang-up. Neither is covered by tests - the spike was single-shot per page
+  load and never hit either.
