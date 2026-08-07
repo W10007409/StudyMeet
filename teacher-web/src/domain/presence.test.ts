@@ -17,6 +17,12 @@ describe('accumulateDisconnected', () => {
   it('정상 상태에서는 그대로 둔다', () => {
     expect(accumulateDisconnected(1000, 'IN_CLASS', 500)).toBe(1000)
   })
+
+  it('틱마다 델타를 더한다 — 누적값을 넘기면 부풀려진다', () => {
+    const afterFirst = accumulateDisconnected(0, 'DISCONNECTED', 1000)
+    const afterSecond = accumulateDisconnected(afterFirst, 'DISCONNECTED', 1000)
+    expect(afterSecond).toBe(2000)
+  })
 })
 
 describe('isAway', () => {
