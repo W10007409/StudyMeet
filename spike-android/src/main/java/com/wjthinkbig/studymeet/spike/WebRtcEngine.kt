@@ -206,11 +206,16 @@ class WebRtcEngine(
                             when (nominatedPairs.size) {
                                 1 -> {
                                     val pair = nominatedPairs.single()
-                                    android.util.Log.i(
-                                        "PipSpike",
-                                        "selectedCandidatePair localType=${localTypeOf(pair)} " +
-                                            "nominated=true succeededPairs=${succeededPairs.size}",
-                                    )
+                                    val type = localTypeOf(pair)
+                                    val message = "selectedCandidatePair localType=$type " +
+                                        "nominated=true succeededPairs=${succeededPairs.size}"
+                                    // candidateType을 못 읽은 경우(TYPE_UNKNOWN)는 구현 결함 의심이므로
+                                    // 다른 결함 의심 케이스들과 마찬가지로 Log.w로 눈에 띄게 남긴다.
+                                    if (type == "TYPE_UNKNOWN") {
+                                        android.util.Log.w("PipSpike", message)
+                                    } else {
+                                        android.util.Log.i("PipSpike", message)
+                                    }
                                 }
                                 0 -> {
                                     // 이 libwebrtc 빌드에서 nominated 키가 없거나 믿을 수 없다 — succeeded
