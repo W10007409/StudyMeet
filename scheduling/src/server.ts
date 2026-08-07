@@ -3,6 +3,7 @@ import { createPrisma } from './db.js'
 import { teacherRoutes } from './routes/teacher.js'
 import { sessionRoutes } from './routes/session.js'
 import { contactRoutes } from './routes/contact.js'
+import { makeupRoutes } from './routes/makeup.js'
 
 const prisma = createPrisma()
 const app = Fastify({ logger: true })
@@ -10,6 +11,7 @@ const app = Fastify({ logger: true })
 app.register(teacherRoutes, { prisma })
 app.register(sessionRoutes, { prisma })
 app.register(contactRoutes, { prisma })
+app.register(makeupRoutes, { prisma })
 
 app.addHook('onClose', async () => {
   await prisma.$disconnect()
