@@ -102,3 +102,18 @@ teacher-web Task 4: complete (commits b18f7da..2270405, review clean, 1 fix pass
   and ws.onmessage kept running against a closed peer connection after
   hang-up. Neither is covered by tests - the spike was single-shot per page
   load and never hit either.
+teacher-web Task 5+6: complete (commits 7181792..fe1bd2f, reviewed together, 1 fix pass)
+  All three screens. FIRST FULL RUN: list -> lobby -> lesson driven in a real
+  browser, bidirectional video, ICE connected, timer, page toast, end returns.
+  Fixes: the tick interval was rebuilt on every presence change so a second of
+  real disconnected time vanished on reconnect - the number a teacher uses to
+  decide compensation; and page_sync was transmitted from inside a state
+  updater, which StrictMode double-invokes.
+teacher-web Task 7: complete (commits bd3450e..a366b78, review clean, 1 fix pass)
+  Note autosave + re-entry within 30 min. Fix: debounce never cleared its
+  pending args, so flush re-sent the note after the timer had already fired -
+  which on a 10-minute lesson is nearly every end. Stub now marks sessions
+  ENDED so re-entry is reachable at all.
+
+=== teacher-web PLAN COMPLETE: Tasks 1-7 ===
+26 tests, clean build, full flow driven in a browser.

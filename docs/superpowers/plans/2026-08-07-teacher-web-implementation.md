@@ -1399,12 +1399,21 @@ export function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: numb
   const wrapped = ((...args: A) => {
     last = args
     if (timer) clearTimeout(timer)
-    timer = setTimeout(() => { timer = null; if (last) fn(...last) }, ms)
+    timer = setTimeout(() => {
+      const pending = last
+      timer = null
+      last = null
+      if (pending) fn(...pending)
+    }, ms)
   }) as Debounced<A>
 
+  // 보낸 인자는 반드시 비운다. 안 비우면 이미 발화한 뒤의 flush 가 같은 메모를
+  // 한 번 더 보낸다. 3초 debounce 라 종료 시점엔 거의 항상 이미 발화한 상태다.
   wrapped.flush = () => {
     if (timer) { clearTimeout(timer); timer = null }
-    if (last) fn(...last)
+    const pending = last
+    last = null
+    if (pending) fn(...pending)
   }
 
   return wrapped
@@ -1414,7 +1423,7 @@ export function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: numb
 ```bash
 npm test
 ```
-Expected: PASS — 21 passed
+Expected: PASS — 26 passed
 
 - [ ] **Step 3: API 에 저장 추가**
 
@@ -1493,7 +1502,7 @@ function canEnter(s: SessionSummary): boolean {
 ```bash
 cd teacher-web && npm run build && npm test
 ```
-Expected: 빌드 성공, 21 passed.
+Expected: 빌드 성공, 26 passed.
 
 - [ ] **Step 7: 커밋**
 
