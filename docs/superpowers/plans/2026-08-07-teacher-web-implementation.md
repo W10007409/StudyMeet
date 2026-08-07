@@ -378,7 +378,7 @@ export function nextLocalPage(current: PageState, pageNo: number): PageState {
 ```bash
 npm test
 ```
-Expected: PASS — 4 passed
+Expected: PASS — 5 passed (스모크 테스트 1개 포함)
 
 - [ ] **Step 6: 이탈 상태 누산 테스트 작성**
 
@@ -450,7 +450,7 @@ export function isAway(state: PresenceState): boolean {
 ```bash
 npm test
 ```
-Expected: PASS — 9 passed
+Expected: PASS — 10 passed
 
 - [ ] **Step 8: 포맷 테스트 작성**
 
@@ -525,7 +525,7 @@ export function maskPhone(phone: string): string {
 ```bash
 npm test
 ```
-Expected: PASS — 15 passed
+Expected: PASS — 16 passed
 
 - [ ] **Step 10: 커밋**
 
@@ -689,7 +689,7 @@ export function createStubApi(): StubApi {
 ```bash
 npm test
 ```
-Expected: PASS — 18 passed
+Expected: PASS — 19 passed
 
 ```bash
 git add teacher-web/src/api
@@ -1275,7 +1275,7 @@ export function Lesson({ api, session, onEnded }: {
 ```bash
 cd teacher-web && npm run build && npm test
 ```
-Expected: 빌드 성공, 18 passed.
+Expected: 빌드 성공, 19 passed.
 
 - [ ] **Step 5: 브라우저에서 확인**
 
@@ -1390,7 +1390,7 @@ export function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: numb
 ```bash
 npm test
 ```
-Expected: PASS — 20 passed
+Expected: PASS — 21 passed
 
 - [ ] **Step 3: API 에 저장 추가**
 
@@ -1469,7 +1469,7 @@ function canEnter(s: SessionSummary): boolean {
 ```bash
 cd teacher-web && npm run build && npm test
 ```
-Expected: 빌드 성공, 20 passed.
+Expected: 빌드 성공, 21 passed.
 
 - [ ] **Step 7: 커밋**
 
