@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { canCancel } from '../domain/deadline.js'
 import { creditDelta, shouldWarn } from '../domain/credit.js'
 import { slotsOfDay, isValidSlot } from '../domain/slots.js'
+import { toKstParts } from '../domain/kst.js'
 
 interface Deps {
   prisma: PrismaClient
@@ -11,12 +12,6 @@ interface Deps {
 
 async function sendNotFound(reply: FastifyReply, message: string): Promise<void> {
   await reply.code(404).send({ error: message })
-}
-
-/** UTC 타임스탬프를 KST 'YYYY-MM-DD' / 'HH:MM' 로 나눈다. materialize.ts 의 변환 관례를 따른다. */
-function toKst(d: Date): { date: string; time: string } {
-  const kstIso = new Date(d.getTime() + 9 * 3600_000).toISOString()
-  return { date: kstIso.slice(0, 10), time: kstIso.slice(11, 16) }
 }
 
 /** from~to (포함) 사이의 KST 날짜 문자열 목록. recurrence.ts 의 날짜 순회 방식과 같다. */
@@ -122,7 +117,7 @@ export const makeupRoutes: FastifyPluginAsync<Deps> = async (app, { prisma }) =>
       const used = new Map<string, Set<string>>()
       for (const date of dateRange(from, to)) used.set(date, new Set())
       for (const s of existing) {
-        const { date, time } = toKst(s.scheduledAt)
+        const { date, time } = toKstParts(s.scheduledAt)
         used.get(date)?.add(time)
       }
 
@@ -164,7 +159,7 @@ export const makeupRoutes: FastifyPluginAsync<Deps> = async (app, { prisma }) =>
       return reply.code(400).send({ error: 'scheduledAt 이 올바른 날짜가 아니다' })
     }
 
-    const { time } = toKst(scheduledAt)
+    const { time } = toKstParts(scheduledAt)
     if (!isValidSlot(time)) {
       return reply.code(400).send({ error: 'scheduledAt 이 슬롯 그리드 위에 있지 않다' })
     }

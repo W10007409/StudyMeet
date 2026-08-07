@@ -65,6 +65,10 @@ export const sessionRoutes: FastifyPluginAsync<Deps> = async (app, { prisma }) =
     const session = await prisma.session.findUnique({ where: { id: request.params.id } })
     if (!session) return sendNotFound(reply)
 
+    if (session.status !== 'SCHEDULED') {
+      return reply.code(409).send({ error: '이미 처리된 세션이다' })
+    }
+
     const { note, disconnectedSec, reason } = parsed.data
     const isNoShow = reason === 'NO_SHOW'
 

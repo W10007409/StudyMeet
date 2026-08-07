@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import type { PrismaClient, SessionStatus } from '@prisma/client'
 import { z } from 'zod'
+import { toKstIsoString } from '../domain/kst.js'
 
 interface Deps {
   prisma: PrismaClient
@@ -49,7 +50,7 @@ export const teacherRoutes: FastifyPluginAsync<Deps> = async (app, { prisma }) =
         sessionId: s.id,
         studentName: s.enrollment.student.name,
         studentId: s.enrollment.studentId,
-        scheduledAt: s.scheduledAt.toISOString(),
+        scheduledAt: toKstIsoString(s.scheduledAt),
         durationMin: s.durationMin,
         bookTitle: s.enrollment.bookTitle,
         status: displayStatus(s.status, s.scheduledAt, now),

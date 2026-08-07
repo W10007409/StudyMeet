@@ -1,7 +1,7 @@
 /** 상위 설계 §4.2의 이탈 상태 모델. 화면 표시는 설계 §5의 표를 따른다. */
 export type PresenceState = 'IN_CLASS' | 'PIP' | 'SCREEN_OFF' | 'DISCONNECTED'
 
-export type SessionStatus = 'SCHEDULED' | 'LOBBY_OPEN' | 'IN_PROGRESS' | 'ENDED'
+export type SessionStatus = 'SCHEDULED' | 'LOBBY_OPEN' | 'IN_PROGRESS' | 'ENDED' | 'CANCELLED' | 'NO_SHOW'
 
 export interface SessionSummary {
   sessionId: string
