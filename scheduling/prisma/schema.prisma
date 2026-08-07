@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Teacher {
+  id          String       @id @default(cuid())
+  name        String
+  enrollments Enrollment[]
+  sessions    Session[]
+}
+
+model Student {
+  id           String       @id @default(cuid())
+  name         String
+  guardianPhone String
+  enrollments  Enrollment[]
+}
+
+/// 담임 관계. 크레딧은 학생이 아니라 이 관계에 붙는다. 설계 §3.2
+model Enrollment {
+  id            String           @id @default(cuid())
+  studentId     String
+  teacherId     String
+  bookTitle     String
+  membershipEnd DateTime?
+  creditBalance Int              @default(0)
+  student       Student          @relation(fields: [studentId], references: [id])
+  teacher       Teacher          @relation(fields: [teacherId], references: [id])
+  rules         RecurrenceRule[]
+  sessions      Session[]
+  ledger        CreditEntry[]
+
+  @@unique([studentId, teacherId])
+}
+
+model RecurrenceRule {
+  id           String     @id @default(cuid())
+  enrollmentId String
+  /// 0=일 … 6=토
+  weekdays     Int[]
+  /// 'HH:MM', 슬롯 그리드 위
+  time         String
+  startsOn     DateTime
+  endsOn       DateTime?
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+}
+
+enum SessionStatus {
+  SCHEDULED
+  LOBBY_OPEN
+  IN_PROGRESS
+  ENDED
+  CANCELLED
+  NO_SHOW
+}
+
+model Session {
+  id              String        @id @default(cuid())
+  enrollmentId    String
+  teacherId       String
+  scheduledAt     DateTime
+  durationMin     Int           @default(10)
+  status          SessionStatus @default(SCHEDULED)
+  /// 반복 규칙에서 생성됐는지, 추가 예약·보강인지
+  isMakeup        Boolean       @default(false)
+  note            String        @default("")
+  disconnectedSec Int           @default(0)
+  endedAt         DateTime?
+  enrollment      Enrollment    @relation(fields: [enrollmentId], references: [id])
+  teacher         Teacher       @relation(fields: [teacherId], references: [id])
+
+  /// 같은 선생님이 같은 슬롯에 두 수업을 가질 수 없다.
+  @@unique([teacherId, scheduledAt])
+  @@index([enrollmentId, scheduledAt])
+}
+
+/// 크레딧 원장. 잔액은 Enrollment 에 캐시하지만 근거는 여기 남는다.
+model CreditEntry {
+  id           String     @id @default(cuid())
+  enrollmentId String
+  delta        Int
+  reason       String
+  sessionId    String?
+  createdAt    DateTime   @default(now())
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+}
+
+model Holiday {
+  /// 'YYYY-MM-DD' (KST 기준)
+  date String @id
+  name String
+}
