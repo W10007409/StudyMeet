@@ -71,3 +71,9 @@ Blocked on hardware:
   - Task 2/3 measurement: Android 14/15/16 tablets, one Samsung
   - Task 5/6 measurement: two devices + LAN + coturn
   - Tasks 7-11 (Part C, iPad): macOS + Xcode + several iPad generations
+P2P Task 7: complete (commit a3e32fb, review clean, no fix pass)
+  Teacher web peer at signaling/public/teacher.html. FIRST RUNTIME PROOF in
+  this branch: two real Chrome tabs negotiated through the server and both
+  reached connected / localType=host nominated=true. getUserMedia was stubbed
+  (no camera on this box); everything below it ran the page's real code.
+  Measurement now needs one tablet + a laptop, not two tablets.
