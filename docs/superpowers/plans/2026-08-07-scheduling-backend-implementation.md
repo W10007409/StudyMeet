@@ -253,7 +253,7 @@ export function isValidSlot(hhmm: string): boolean {
 ```bash
 npm test
 ```
-Expected: PASS — 5 passed
+Expected: PASS — 4 passed (스모크 1 포함)
 
 - [ ] **Step 3: 반복 규칙 실패 테스트**
 
@@ -338,7 +338,7 @@ export function expandRule(
 ```bash
 npm test
 ```
-Expected: PASS — 9 passed
+Expected: PASS — 8 passed
 
 - [ ] **Step 5: 커밋**
 
@@ -428,7 +428,7 @@ export function isNoShow(startsAt: Date, now: Date): boolean {
 ```bash
 npm test
 ```
-Expected: PASS — 15 passed
+Expected: PASS — 14 passed
 
 - [ ] **Step 3: 크레딧 실패 테스트**
 
@@ -517,7 +517,7 @@ export function shouldWarn(balance: number): boolean {
 ```bash
 npm test
 ```
-Expected: PASS — 21 passed
+Expected: PASS — 19 passed
 
 - [ ] **Step 5: 커밋**
 
@@ -804,7 +804,7 @@ export async function materialize(prisma: PrismaClient, today: string): Promise<
 ```bash
 npm test
 ```
-Expected: PASS — 24 passed
+Expected: PASS — 22 passed
 
 - [ ] **Step 3: 커밋**
 
@@ -886,7 +886,7 @@ git commit -m "feat(scheduling): implement the seven endpoints the teacher scree
 ```bash
 cd scheduling && npm test
 ```
-Expected: 24 passed (기존 테스트 유지)
+Expected: 22 passed (기존 테스트 유지)
 
 수동 확인 — 휴강 한 번, 보강 한 번을 태운 뒤:
 ```sql
