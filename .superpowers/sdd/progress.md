@@ -59,3 +59,15 @@ P2P Task 5: complete (commits 5c89d62..2005a0d, review clean after 2 fix passes)
 P2P Task 6: implemented + 1 fix pass (28ce482). Awaiting re-review.
   TURN optional via local.properties; selectedCandidatePair log now names the
   nominated pair and marks ambiguity, so the relay tally cannot be miscounted.
+P2P Task 6: complete (commits 5fa709f..c630f78, 3 fix passes)
+  TURN optional; selectedCandidatePair log names the nominated pair, marks
+  ambiguity, and keeps unreadable types out of the tally. coturn.md carries
+  one unambiguous counting rule.
+
+=== ENVIRONMENT LIMIT REACHED ===
+Tasks 1-6 (Parts A and B) are code-complete and compile.
+NOTHING has been measured. Every number in phase0-poc-results.md is empty.
+Blocked on hardware:
+  - Task 2/3 measurement: Android 14/15/16 tablets, one Samsung
+  - Task 5/6 measurement: two devices + LAN + coturn
+  - Tasks 7-11 (Part C, iPad): macOS + Xcode + several iPad generations
