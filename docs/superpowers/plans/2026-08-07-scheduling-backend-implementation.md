@@ -78,12 +78,15 @@ Create `scheduling/package.json`:
     "db:generate": "prisma generate"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "7.9.1",
     "@prisma/client": "7.9.1",
     "fastify": "5.11.2",
+    "pg": "8.22.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "22.19.1",
+    "@types/pg": "8.20.4",
     "prisma": "7.9.1",
     "tsx": "4.23.10",
     "typescript": "7.0.2",
@@ -652,6 +655,25 @@ model Holiday {
 }
 ```
 
+> **Prisma 7 은 런타임에도 드라이버 어댑터를 요구한다.** `prisma.config.ts` 는 CLI 전용이라 `new PrismaClient()` 는 `A driver adapter is required` 로 던진다. 클라이언트를 만드는 곳을 한 군데로 모은다.
+
+Create `scheduling/src/db.ts`:
+
+```typescript
+import { PrismaPg } from '@prisma/adapter-pg'
+import { PrismaClient } from '@prisma/client'
+
+export function createPrisma(): PrismaClient {
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) throw new Error('DATABASE_URL 이 없다')
+  return new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
+}
+```
+
+모든 `DateTime` 필드에는 `@db.Timestamptz(3)` 를 붙인다. 기본값은 timezone 없는 컬럼이라, 운영자가 DB를 직접 만질 때 오프셋이 조용히 잘린다.
+
+**`materialize` 는 각 규칙의 `startsOn`/`endsOn` 으로 창을 좁혀야 한다.** 안 하면 종료된 규칙이 영원히 수업을 만들어 담임 슬롯을 잠식하고, `@@unique([teacherId, scheduledAt])` 가 진짜 예약을 막는다.
+
 - [ ] **Step 2: 로컬 DB 문서**
 
 Create `scheduling/README.md`:
@@ -765,10 +787,13 @@ export function sessionsToCreate(wanted: string[], existing: string[]): string[]
 
 const WEEKS_AHEAD = 4
 
+// expandRule 의 끝은 포함이므로 하루를 빼야 정확히 4주가 된다.
+const WINDOW_DAYS = WEEKS_AHEAD * 7 - 1
+
 /** 설계 §3.1 — 4주치를 미리 행으로 만든다. */
 export async function materialize(prisma: PrismaClient, today: string): Promise<number> {
   const until = new Date(`${today}T00:00:00Z`)
-  until.setUTCDate(until.getUTCDate() + WEEKS_AHEAD * 7)
+  until.setUTCDate(until.getUTCDate() + WINDOW_DAYS)
   const toDate = until.toISOString().slice(0, 10)
 
   const holidays = (await prisma.holiday.findMany()).map((h) => h.date)

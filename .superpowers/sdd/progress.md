@@ -117,3 +117,20 @@ teacher-web Task 7: complete (commits bd3450e..a366b78, review clean, 1 fix pass
 
 === teacher-web PLAN COMPLETE: Tasks 1-7 ===
 26 tests, clean build, full flow driven in a browser.
+
+=== NEW PLAN: scheduling backend (1a1aaec) ===
+Plan: docs/superpowers/plans/2026-08-07-scheduling-backend-implementation.md
+Spec: docs/superpowers/specs/2026-08-07-lesson-scheduling-design.md
+Docker 29.3.1 present, port 5432 free -> all 7 tasks runnable here.
+Starting at Task 1.
+scheduling Task 1: complete (301180d) - TS 7.0.2 works, no traps fired.
+scheduling Task 2+3: complete (3241232..ca2b00c, reviewed together, no fix pass)
+  Slot grid, recurrence with holidays, cancel deadline, no-show, credit rules.
+  19 tests. Reviewer compiled a mutated CreditEvent union to prove the
+  exhaustive switch really rejects an undecided event.
+scheduling Task 4+5: complete (fb6a77d..1796ccb, reviewed together, 1 fix pass)
+  Schema + materialisation job. Review CAUGHT A BLOCKER by executing it:
+  Prisma 7 needs a driver adapter, so PrismaClient could not be constructed
+  at all and materialize() could never have run. Also: recurrence rules
+  ignored their own startsOn/endsOn, so an ended rule produced lessons
+  forever; window was 29 days not 28; columns lacked timezone.
