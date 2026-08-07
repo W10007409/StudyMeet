@@ -20,6 +20,21 @@ LAN IP 확인:
 - Windows: `ipconfig` 의 IPv4 주소
 - macOS: `ipconfig getifaddr en0`
 
+## 선생님 화면 (측정용)
+
+서버를 띄운 뒤 브라우저에서 연다:
+
+    http://<PC의 LAN IP>:8080/teacher.html?room=phase0&role=callee
+
+태블릿은 `role=caller` 로 붙인다. 두 쪽 role이 같으면 offer가 두 개 나가 협상이 깨진다.
+
+TURN을 쓰려면 쿼리로 넘긴다 (**페이지에 하드코딩하지 않는다**):
+
+    ...&turn=turn:<IP>:3478&turnUser=spike&turnPass=<값>
+
+브라우저가 `getUserMedia` 를 허용하려면 **localhost 이거나 HTTPS** 여야 한다. LAN IP + 평문 HTTP 로
+열면 카메라 권한이 거부된다. 우회 방법은 아래 "브라우저 보안 컨텍스트" 절 참조.
+
 ## 프로토콜
 
 같은 `room` 의 두 참가자 사이에서 받은 텍스트를 그대로 상대에게 전달한다.
@@ -38,3 +53,19 @@ LAN IP 확인:
 클라이언트가 주고받는 메시지는 서버가 해석하지 않는다:
 `{"type":"offer","sdp":...}`, `{"type":"answer","sdp":...}`,
 `{"type":"candidate","candidate":...,"sdpMid":...,"sdpMLineIndex":...}`
+
+## 브라우저 보안 컨텍스트
+
+`getUserMedia` 는 보안 컨텍스트에서만 동작한다. `http://<LAN IP>:8080` 은 해당되지 않는다.
+스파이크에서는 셋 중 하나를 쓴다.
+
+1. **Chrome 플래그** (가장 간단) — 측정용 프로필에서만 켠다:
+
+       chrome.exe --unsafely-treat-insecure-origin-as-secure=http://<LAN IP>:8080 --user-data-dir=%TEMP%\studymeet-spike
+
+2. **포트 포워딩** — 노트북에서 `chrome://inspect` 의 Port forwarding 으로 `8080` 을 태블릿에 넘기고
+   양쪽 다 `http://localhost:8080` 으로 접속한다.
+3. **자체 서명 인증서로 HTTPS** — 가장 번거롭다. 마지막 수단.
+
+1번을 쓸 때는 **반드시 별도 `--user-data-dir` 로 띄운다.** 평소 쓰는 브라우저 프로필에
+이 플래그를 걸면 안 된다.

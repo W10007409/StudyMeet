@@ -4,11 +4,37 @@
 
 const { WebSocketServer } = require('ws');
 const { parse } = require('url');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
 const PORT = process.env.PORT || 8080;
 const rooms = new Map(); // roomId -> Set<WebSocket>
 
-const wss = new WebSocketServer({ port: PORT });
+const server = http.createServer((req, res) => {
+  const filePath = parse(req.url).pathname === '/'
+    ? '/teacher.html'
+    : parse(req.url).pathname;
+  // 경로 탈출 방지. 스파이크라도 상위 디렉터리를 열어주면 안 된다.
+  const resolved = path.join(__dirname, 'public', path.normalize(filePath).replace(/^(\.\.[/\\])+/, ''));
+  if (!resolved.startsWith(path.join(__dirname, 'public'))) {
+    res.writeHead(403);
+    res.end('forbidden');
+    return;
+  }
+  fs.readFile(resolved, (err, data) => {
+    if (err) {
+      res.writeHead(404);
+      res.end('not found');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(data);
+  });
+});
+
+const wss = new WebSocketServer({ server });
+server.listen(PORT);
 
 wss.on('connection', (ws, req) => {
   const { query } = parse(req.url, true);
@@ -60,4 +86,5 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-console.log(`signaling server listening on ws://0.0.0.0:${PORT}`);
+console.log(`signaling + static server listening on http://0.0.0.0:${PORT}`);
+console.log(`teacher page: http://0.0.0.0:${PORT}/teacher.html?room=phase0&role=callee`);
