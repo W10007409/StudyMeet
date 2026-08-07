@@ -34,9 +34,9 @@
 | 파트 | 필요 환경 |
 |---|---|
 | Part A (Task 1–3) | 현재 Windows 머신에서 코드 작성·컴파일 가능. **측정에는 Android 태블릿 실기기 필요** (Android 14/15/16, 삼성 1대 포함) |
-| Part B (Task 4–6) | Node.js. 두 대 이상의 Android 기기 (또는 기기 1 + PC 브라우저) |
-| Part C (Task 7–10) | **macOS + Xcode 15 이상 + iPad 실기기.** 현재 Windows 머신에서는 실행 불가 |
-| Part D (Task 11) | 임의 OS |
+| Part B (Task 4–7) | Node.js. **Task 7의 선생님 웹 페이지가 상대 피어가 되므로 Android 기기는 1대면 된다.** 브라우저 두 개만으로도 시그널링·협상·통계 읽기를 검증할 수 있다 |
+| Part C (Task 8–11) | **macOS + Xcode 15 이상 + iPad 실기기.** 현재 Windows 머신에서는 실행 불가. 상대 피어는 브라우저로 대체 가능 |
+| Part D (Task 12) | 임의 OS |
 
 ---
 
@@ -53,8 +53,9 @@
 | `spike-android/.../ClassForegroundService.kt` | 변경 없음 | 유지 |
 | `spike-android/.../SignalingClient.kt` | WebSocket 시그널링 클라이언트 | 신규 |
 | `spike-android/src/androidTest/.../PipCameraSurvivalTest.kt` | 트랙 준비 방식만 변경 | 수정 |
-| `signaling/server.js` | 최소 WebSocket 시그널링 서버 | 신규 |
+| `signaling/server.js` | 최소 WebSocket 시그널링 서버 + 정적 파일 서빙 | 신규 |
 | `signaling/package.json` | 의존성 | 신규 |
+| `signaling/public/teacher.html` | 선생님 웹 클라이언트 (측정용 상대 피어) | 신규 |
 | `spikes/ios-p2p-spike/` | 독립 Xcode 프로젝트 | 신규 |
 | `docs/superpowers/specs/phase0-poc-results.md` | 측정 결과 기록 | 수정 |
 
@@ -1216,11 +1217,323 @@ git commit -m "spike(android): add TURN and record which ICE candidate type wins
 
 ---
 
+### Task 7: 선생님 웹 클라이언트 (측정 상대 피어)
+
+**이 태스크는 하드웨어 블로커 하나를 없앤다.** 지금 Task 5·6의 측정에는 Android 태블릿이 **2대** 필요하다. 브라우저가 상대 피어가 되면 **태블릿 1대 + 노트북**이면 되고, Task 11(iPad ↔ 상대)도 iPad 1대로 줄어든다.
+
+범위는 **측정용 피어**까지다. 이탈 배지·누적 끊김 시간·수업 타이머·종료 버튼 같은 제품 화면 요소는 설계 §12 오픈이슈 #3(선생님 클라이언트 형태)이 정해진 뒤 별도 과제로 만든다. 여기서 만들지 않는다.
+
+**Files:**
+- Create: `signaling/public/teacher.html`
+- Modify: `signaling/server.js`
+- Modify: `signaling/README.md`
+
+**Interfaces:**
+- Consumes: 시그널링 프로토콜 (Task 4) — `ready`, `peer-left`, `offer`, `answer`, `candidate`
+- Produces: `http://<host>:8080/teacher.html?room=<roomId>&role=<caller|callee>` 로 열리는 페이지
+
+- [ ] **Step 1: 시그널링 서버가 정적 파일도 서빙하게 한다**
+
+지금 서버는 WebSocket만 받는다. 브라우저가 페이지를 받아갈 곳이 필요하다. 의존성을 늘리지 않기 위해 Node 내장 `http` 로 처리한다.
+
+Modify `signaling/server.js` — 상단 require 에 추가:
+
+```javascript
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+```
+
+`const wss = new WebSocketServer({ port: PORT });` 를 다음으로 교체한다. HTTP 서버 하나를 만들고 WebSocket 을 거기 얹는다:
+
+```javascript
+const server = http.createServer((req, res) => {
+  const filePath = parse(req.url).pathname === '/'
+    ? '/teacher.html'
+    : parse(req.url).pathname;
+  // 경로 탈출 방지. 스파이크라도 상위 디렉터리를 열어주면 안 된다.
+  const resolved = path.join(__dirname, 'public', path.normalize(filePath).replace(/^(\.\.[/\\])+/, ''));
+  if (!resolved.startsWith(path.join(__dirname, 'public'))) {
+    res.writeHead(403);
+    res.end('forbidden');
+    return;
+  }
+  fs.readFile(resolved, (err, data) => {
+    if (err) {
+      res.writeHead(404);
+      res.end('not found');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(data);
+  });
+});
+
+const wss = new WebSocketServer({ server });
+server.listen(PORT);
+```
+
+파일 끝의 `console.log` 를 다음으로 바꾼다:
+
+```javascript
+console.log(`signaling + static server listening on http://0.0.0.0:${PORT}`);
+console.log(`teacher page: http://0.0.0.0:${PORT}/teacher.html?room=phase0&role=callee`);
+```
+
+- [ ] **Step 2: 선생님 페이지 작성**
+
+Create `signaling/public/teacher.html`:
+
+```html
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>StudyMeet 측정용 선생님 화면</title>
+<style>
+  body { margin: 0; background: #111; color: #eee; font-family: system-ui, sans-serif; }
+  #wrap { display: flex; height: 100vh; }
+  #remote { flex: 1; background: #000; object-fit: contain; }
+  #side { width: 320px; padding: 16px; box-sizing: border-box; overflow-y: auto; }
+  #local { width: 100%; background: #000; border-radius: 6px; }
+  .k { color: #888; font-size: 12px; margin-top: 12px; }
+  .v { font-size: 15px; word-break: break-all; }
+  #log { font-family: ui-monospace, monospace; font-size: 11px; white-space: pre-wrap;
+         background: #000; padding: 8px; border-radius: 6px; height: 220px; overflow-y: auto; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <video id="remote" autoplay playsinline></video>
+  <div id="side">
+    <video id="local" autoplay playsinline muted></video>
+    <div class="k">방</div><div class="v" id="room">-</div>
+    <div class="k">역할</div><div class="v" id="role">-</div>
+    <div class="k">시그널링</div><div class="v" id="ws">연결 안 됨</div>
+    <div class="k">ICE 상태</div><div class="v" id="ice">-</div>
+    <div class="k">선택된 후보 쌍</div><div class="v" id="pair">-</div>
+    <div class="k">로그</div><div id="log"></div>
+  </div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const room = params.get('room') || 'phase0';
+const role = params.get('role') || 'callee';
+const isCaller = role === 'caller';
+
+document.getElementById('room').textContent = room;
+document.getElementById('role').textContent = role;
+
+function log(msg) {
+  const el = document.getElementById('log');
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+function set(id, text) { document.getElementById(id).textContent = text; }
+
+// TURN 자격증명은 페이지에 하드코딩하지 않는다. 쿼리로 넘긴다.
+//   &turn=turn:1.2.3.4:3478&turnUser=spike&turnPass=...
+const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+if (params.get('turn')) {
+  iceServers.push({
+    urls: params.get('turn'),
+    username: params.get('turnUser') || '',
+    credential: params.get('turnPass') || '',
+  });
+}
+
+const pc = new RTCPeerConnection({ iceServers });
+let ws;
+let remoteDescriptionSet = false;
+const pendingCandidates = [];
+
+pc.addEventListener('track', (e) => {
+  document.getElementById('remote').srcObject = e.streams[0];
+  log('원격 트랙 수신');
+});
+
+pc.addEventListener('icecandidate', (e) => {
+  if (!e.candidate) return;
+  ws.send(JSON.stringify({
+    type: 'candidate',
+    candidate: e.candidate.candidate,
+    sdpMid: e.candidate.sdpMid,
+    sdpMLineIndex: e.candidate.sdpMLineIndex,
+  }));
+});
+
+pc.addEventListener('iceconnectionstatechange', async () => {
+  set('ice', pc.iceConnectionState);
+  log('iceConnectionState=' + pc.iceConnectionState);
+  if (pc.iceConnectionState !== 'connected') return;
+
+  // Android 쪽 selectedCandidatePair 로그와 같은 것을 브라우저에서도 읽는다.
+  const stats = await pc.getStats();
+  const pairs = [];
+  stats.forEach((s) => {
+    if (s.type === 'candidate-pair' && s.state === 'succeeded') pairs.push(s);
+  });
+  if (pairs.length === 0) { set('pair', 'NONE_FOUND'); log('NONE_FOUND'); return; }
+  const nominated = pairs.filter((p) => p.nominated === true);
+  const chosen = nominated.length === 1 ? nominated : pairs;
+  const ambiguous = nominated.length !== 1;
+  chosen.forEach((p) => {
+    const local = stats.get(p.localCandidateId);
+    const t = (local && local.candidateType) || 'TYPE_UNKNOWN';
+    const line = 'localType=' + t
+      + ' nominated=' + (nominated.length === 1 ? 'true' : 'unknown')
+      + (ambiguous ? ' ambiguous=true' : '')
+      + ' succeededPairs=' + pairs.length;
+    set('pair', line);
+    log(line);
+  });
+});
+
+async function flushCandidates() {
+  remoteDescriptionSet = true;
+  while (pendingCandidates.length) {
+    const c = pendingCandidates.shift();
+    try { await pc.addIceCandidate(c); } catch (e) { log('addIceCandidate 거부: ' + e); }
+  }
+}
+
+async function start() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: 480, height: 270, frameRate: 24 },
+    audio: true,
+  });
+  document.getElementById('local').srcObject = stream;
+  stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(proto + '://' + location.host + '/?room=' + encodeURIComponent(room));
+
+  ws.onopen = () => set('ws', '연결됨');
+  ws.onclose = () => set('ws', '끊김');
+
+  ws.onmessage = async (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'ready') {
+      log('상대 입장');
+      if (isCaller) {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        ws.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
+      }
+      return;
+    }
+    if (msg.type === 'peer-left') { log('상대 나감'); return; }
+
+    if (msg.type === 'offer') {
+      await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+      await flushCandidates();
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      ws.send(JSON.stringify({ type: 'answer', sdp: answer.sdp }));
+    } else if (msg.type === 'answer') {
+      await pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp });
+      await flushCandidates();
+    } else if (msg.type === 'candidate') {
+      const c = new RTCIceCandidate({
+        candidate: msg.candidate,
+        sdpMid: msg.sdpMid,
+        sdpMLineIndex: msg.sdpMLineIndex,
+      });
+      if (remoteDescriptionSet) {
+        try { await pc.addIceCandidate(c); } catch (e) { log('addIceCandidate 거부: ' + e); }
+      } else {
+        pendingCandidates.push(c);
+      }
+    }
+  };
+}
+
+start().catch((e) => log('시작 실패: ' + e));
+</script>
+</body>
+</html>
+```
+
+- [ ] **Step 3: README 갱신**
+
+Modify `signaling/README.md` — 실행 절 뒤에 추가:
+
+```markdown
+## 선생님 화면 (측정용)
+
+서버를 띄운 뒤 브라우저에서 연다:
+
+    http://<PC의 LAN IP>:8080/teacher.html?room=phase0&role=callee
+
+태블릿은 `role=caller` 로 붙인다. 두 쪽 role이 같으면 offer가 두 개 나가 협상이 깨진다.
+
+TURN을 쓰려면 쿼리로 넘긴다 (**페이지에 하드코딩하지 않는다**):
+
+    ...&turn=turn:<IP>:3478&turnUser=spike&turnPass=<값>
+
+브라우저가 `getUserMedia` 를 허용하려면 **localhost 이거나 HTTPS** 여야 한다. LAN IP + 평문 HTTP 로
+열면 카메라 권한이 거부된다. 우회 방법은 아래 "브라우저 보안 컨텍스트" 절 참조.
+```
+
+그리고 파일 끝에 추가:
+
+```markdown
+## 브라우저 보안 컨텍스트
+
+`getUserMedia` 는 보안 컨텍스트에서만 동작한다. `http://<LAN IP>:8080` 은 해당되지 않는다.
+스파이크에서는 셋 중 하나를 쓴다.
+
+1. **Chrome 플래그** (가장 간단) — 측정용 프로필에서만 켠다:
+
+       chrome.exe --unsafely-treat-insecure-origin-as-secure=http://<LAN IP>:8080 --user-data-dir=%TEMP%\studymeet-spike
+
+2. **포트 포워딩** — 노트북에서 `chrome://inspect` 의 Port forwarding 으로 `8080` 을 태블릿에 넘기고
+   양쪽 다 `http://localhost:8080` 으로 접속한다.
+3. **자체 서명 인증서로 HTTPS** — 가장 번거롭다. 마지막 수단.
+
+1번을 쓸 때는 **반드시 별도 `--user-data-dir` 로 띄운다.** 평소 쓰는 브라우저 프로필에
+이 플래그를 걸면 안 된다.
+```
+
+- [ ] **Step 4: 서버와 페이지가 뜨는지 확인**
+
+```bash
+cd signaling && npm start
+```
+Expected: `signaling + static server listening on http://0.0.0.0:8080`
+
+브라우저에서 `http://localhost:8080/teacher.html?room=phase0&role=callee` 를 연다.
+
+Expected: 화면 왼쪽이 검은 영상 영역, 오른쪽에 자기 카메라 미리보기와 상태 패널. `시그널링` 이 `연결됨`.
+
+카메라가 안 뜨면 보안 컨텍스트 문제다. `localhost` 로 열었는지 확인한다.
+
+- [ ] **Step 5: 브라우저 두 개로 P2P 확인 (기기 없이 가능)**
+
+같은 PC에서 브라우저 창 두 개를 연다:
+```
+http://localhost:8080/teacher.html?room=phase0&role=caller
+http://localhost:8080/teacher.html?room=phase0&role=callee
+```
+
+Expected: 양쪽에 상대 영상이 뜨고, `ICE 상태` 가 `connected`, `선택된 후보 쌍` 에 `localType=host ...` 가 표시된다.
+
+**이 단계는 실기기 없이 시그널링·협상·통계 읽기를 전부 검증한다.** 여기서 깨지면 태블릿을 꽂아도 깨진다.
+
+- [ ] **Step 6: 커밋**
+
+```bash
+git add signaling
+git commit -m "spike(web): add a teacher page so one tablet is enough to measure"
+```
+
+---
+
 ## Part C — iPad
 
 > **이 파트는 macOS + Xcode 15 이상 + iPad 실기기가 필요하다.** 환경이 확보되기 전까지 착수하지 않는다.
 
-### Task 7: Xcode 프로젝트와 libwebrtc 로컬 카메라
+### Task 8: Xcode 프로젝트와 libwebrtc 로컬 카메라
 
 **Files:**
 - Create: `spikes/ios-p2p-spike/` (Xcode 프로젝트)
@@ -1421,7 +1734,7 @@ git commit -m "spike(ios): render the local camera with raw libwebrtc on iPad"
 
 ---
 
-### Task 8: 멀티태스킹 카메라 접근
+### Task 9: 멀티태스킹 카메라 접근
 
 **Files:**
 - Modify: `spikes/ios-p2p-spike/P2PSpike/ClassViewController.swift`
@@ -1472,7 +1785,7 @@ git commit -m "spike(ios): detect and enable multitasking camera access"
 
 ---
 
-### Task 9: PiP용 SampleBuffer 렌더러 직접 구현
+### Task 10: PiP용 SampleBuffer 렌더러 직접 구현
 
 설계 §5.2.1이다. LiveKit이 공개 API로 주던 것을 여기서는 직접 만든다.
 
@@ -1638,7 +1951,7 @@ git commit -m "spike(ios): hand-write the sample buffer renderer needed for vide
 
 ---
 
-### Task 10: iOS ↔ Android P2P 연결과 PiP 중 카메라 계측
+### Task 11: iOS ↔ Android P2P 연결과 PiP 중 카메라 계측
 
 Part C의 결론을 만드는 지점이다.
 
@@ -1715,7 +2028,7 @@ git commit -m "spike(ios): measure camera continuity during PiP across iPad mode
 
 ## Part D — 결론
 
-### Task 11: 결과 판정과 설계 반영
+### Task 12: 결과 판정과 설계 반영
 
 **Files:**
 - Modify: `docs/superpowers/specs/phase0-poc-results.md`
@@ -1779,5 +2092,8 @@ Phase 0 (P2P) 결과
 | 학습 화면 가안, 페이지 동기화, 포인터 | Phase 5 |
 | TURN 운영 구성(TLS 443), 대규모 부하 | Phase 6 |
 | SFU(LiveKit) 전환 | 후속 과제 (설계 §2.3) |
+| **제품용 선생님 화면** — 이탈 상태 배지, 누적 끊김 시간, 수업 타이머, 종료 버튼, 학생 준비상태 대시보드 | 별도 과제. 설계 §12 오픈이슈 #3(선생님 클라이언트 형태)이 정해진 뒤 |
+
+Task 7의 `teacher.html` 은 **측정용 상대 피어**일 뿐이다. 제품 선생님 화면이 아니다. 설계 §4.2의 이탈 상태 모델과 §4.6의 누적 끊김 시간은 DataChannel(Phase 2)과 세션 백엔드가 있어야 성립하므로 여기서 만들지 않는다.
 
 스파이크 코드(`spike-android/`, `signaling/`, `spikes/ios-p2p-spike/`)는 Phase 1 착수 시점에 삭제한다. 남길 것은 `phase0-poc-results.md` 의 측정값뿐이다.
