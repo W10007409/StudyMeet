@@ -1,8 +1,8 @@
-export function BookViewer({ pageNo, totalPages, lastBy, onPage, onPointer }: {
+export function BookViewer({ pageNo, totalPages, lastBy, onPageDelta, onPointer }: {
   pageNo: number
   totalPages: number
   lastBy: 'teacher' | 'student' | null
-  onPage: (next: number) => void
+  onPageDelta: (delta: number) => void
   onPointer: (x: number, y: number, action: 'down' | 'move' | 'up') => void
 }) {
   return (
@@ -21,9 +21,9 @@ export function BookViewer({ pageNo, totalPages, lastBy, onPage, onPointer }: {
         책 지면 {pageNo}
       </div>
       <div style={{ height: 48, display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'center' }}>
-        <button onClick={() => onPage(Math.max(1, pageNo - 1))}>◀</button>
+        <button onClick={() => onPageDelta(-1)}>◀</button>
         <span>{pageNo} / {totalPages}</span>
-        <button onClick={() => onPage(Math.min(totalPages, pageNo + 1))}>▶</button>
+        <button onClick={() => onPageDelta(+1)}>▶</button>
       </div>
       {/* 조용히 동기화되면 "내가 넘긴 게 아닌데" 가 된다. 설계 §7.2 */}
       {lastBy && (

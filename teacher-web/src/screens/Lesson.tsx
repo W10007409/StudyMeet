@@ -26,14 +26,22 @@ export function Lesson({ api, session, onEnded }: {
   const startedAt = useRef(Date.now())
   const noteRef = useRef('')
   noteRef.current = note
+  const pageRef = useRef<PageState>({ pageNo: 1, counter: 0, by: 'teacher' })
+  pageRef.current = page
+  const presenceRef = useRef<PresenceState>('IN_CLASS')
+  presenceRef.current = presence
+  const presenceSinceRef = useRef(Date.now())
+  presenceSinceRef.current = presenceSince
 
   const onData = useCallback((msg: DataMessage) => {
     if (msg.type === 'page_sync') {
-      setPage((cur) => {
-        const next = applyPageSync(cur, { pageNo: msg.pageNo, counter: msg.counter, by: msg.by })
-        if (next !== cur) setLastBy(msg.by)
-        return next
-      })
+      const incoming = { pageNo: msg.pageNo, counter: msg.counter, by: msg.by }
+      const next = applyPageSync(pageRef.current, incoming)
+      if (next !== pageRef.current) {
+        pageRef.current = next
+        setPage(next)
+        setLastBy(msg.by)
+      }
     } else if (msg.type === 'presence') {
       setPresence(msg.state)
       setPresenceSince(Date.now())
@@ -56,14 +64,17 @@ export function Lesson({ api, session, onEnded }: {
   })
 
   // 1초 틱 하나로 경과·이탈·누적 끊김을 모두 갱신한다.
+  // presence/presenceSince를 deps에 넣으면 접속이 바뀔 때마다 인터벌이
+  // 재생성되면서 대기 중이던 tick이 유실된다. 컴포넌트 생애 동안 하나만
+  // 돌리고, 최신 값은 ref로 읽는다.
   useEffect(() => {
     const id = setInterval(() => {
       setElapsedMs(Date.now() - startedAt.current)
-      setPresenceMs(Date.now() - presenceSince)
-      setDisconnectedMs((prev) => accumulateDisconnected(prev, presence, 1000))
+      setPresenceMs(Date.now() - presenceSinceRef.current)
+      setDisconnectedMs((prev) => accumulateDisconnected(prev, presenceRef.current, 1000))
     }, 1000)
     return () => clearInterval(id)
-  }, [presence, presenceSince])
+  }, [])
 
   // 토스트는 1.5초만 띄운다.
   useEffect(() => {
@@ -73,12 +84,17 @@ export function Lesson({ api, session, onEnded }: {
   }, [lastBy])
 
   const changePage = (pageNo: number) => {
-    setPage((cur) => {
-      const next = nextLocalPage(cur, pageNo)
-      send({ type: 'page_sync', pageNo: next.pageNo, counter: next.counter, by: 'teacher' })
-      return next
-    })
+    const next = nextLocalPage(pageRef.current, pageNo)
+    pageRef.current = next
+    setPage(next)
     setLastBy('teacher')
+    send({ type: 'page_sync', pageNo: next.pageNo, counter: next.counter, by: 'teacher' })
+  }
+
+  const changePageBy = (delta: number) => {
+    const target = Math.min(TOTAL_PAGES, Math.max(1, pageRef.current.pageNo + delta))
+    if (target === pageRef.current.pageNo) return
+    changePage(target)
   }
 
   const end = async () => {
@@ -101,7 +117,7 @@ export function Lesson({ api, session, onEnded }: {
           pageNo={page.pageNo}
           totalPages={TOTAL_PAGES}
           lastBy={lastBy}
-          onPage={changePage}
+          onPageDelta={changePageBy}
           onPointer={(x, y, action) => send({ type: 'pointer', x, y, action })}
         />
         <div style={{ flex: '0 0 42%', display: 'flex', flexDirection: 'column' }}>
