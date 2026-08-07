@@ -51,3 +51,11 @@ P2P Task 3: complete (commit 6af4855, review clean, no fix pass)
 P2P Task 4: complete (commit 8d04125, review clean, no fix pass)
   Signalling server verified end to end with two ws clients on Node 22.
   README clarified after review: role= is client-side only, server ignores it.
+P2P Task 5: complete (commits 5c89d62..2005a0d, review clean after 2 fix passes)
+  SignalingClient + PeerConnection. Fixed: ICE candidates dropped silently
+  before setRemoteDescription; native addIceCandidate called under the buffer
+  lock (circular wait with libwebrtc's signalling thread); peerConnection
+  published without @Volatile.
+P2P Task 6: implemented + 1 fix pass (28ce482). Awaiting re-review.
+  TURN optional via local.properties; selectedCandidatePair log now names the
+  nominated pair and marks ambiguity, so the relay tally cannot be miscounted.
