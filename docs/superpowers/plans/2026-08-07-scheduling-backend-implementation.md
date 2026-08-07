@@ -876,6 +876,10 @@ git commit -m "feat(scheduling): materialize four weeks of sessions idempotently
 
 요청 본문은 전부 `zod` 로 검증한다.
 
+⚠️ **`scheduledAt` 은 `toISOString()` 으로 내보내면 안 된다.** 선생님 화면이 `scheduledAt.slice(11, 16)` 으로 시각을 표시하기 때문에, UTC 문자열을 주면 19:00 수업이 "10:00" 으로 보인다. **`+09:00` 오프셋 ISO 문자열**로 내보낸다.
+
+⚠️ **`POST /sessions/:id/end` 는 상태가 `SCHEDULED` 가 아니면 409 로 막아야 한다.** 안 막으면 두 번 호출 시 빠진 수업 하나에 크레딧이 두 번 발급된다. 원장과 잔액을 함께 쓰므로 **잔액-원장 대조로는 이 결함이 안 잡힌다** — 둘 다 똑같이 틀린 채로 일치한다.
+
 `POST /sessions/:id/end` 의 `reason` 은 선택이며 `'NO_SHOW'` 가 오면 상태를 `NO_SHOW` 로 두고 크레딧을 발생시킨다. 이것이 설계 §4.1의 **선생님 조기 노쇼 처리** 경로다. `reason` 이 없으면 `ENDED` 다.
 
 `POST /sessions/:id/nudge` 는 FCM 발송 결과를 그대로 담아 돌려준다. **도달 실패를 성공으로 바꾸지 않는다** — 선생님 화면이 그 값을 보고 "알림이 전달되지 않았어요"를 띄운다. FCM 연동 자체는 이 계획 범위 밖이므로, 지금은 `{ delivered: false, reason: 'FCM_NOT_CONFIGURED' }` 를 돌려주고 그 사실을 로그에 남긴다.

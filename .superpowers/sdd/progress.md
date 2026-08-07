@@ -134,3 +134,14 @@ scheduling Task 4+5: complete (fb6a77d..1796ccb, reviewed together, 1 fix pass)
   at all and materialize() could never have run. Also: recurrence rules
   ignored their own startsOn/endsOn, so an ended rule produced lessons
   forever; window was 29 days not 28; columns lacked timezone.
+scheduling Task 6+7: complete (51d1093..bfad638, reviewed together, 1 fix pass)
+  All ten endpoints, exercised live with curl. Review caught two criticals:
+  scheduledAt went out as UTC while the screen slices the string, so every
+  lesson time would have shown nine hours early; and /end had no terminal
+  status guard, so calling it twice issued two credits for one missed lesson
+  - invisible to the balance-vs-ledger check because both sides stayed
+  consistent while both were wrong.
+
+=== scheduling backend PLAN COMPLETE: Tasks 1-7 ===
+22 tests, clean build, all endpoints verified against live Postgres.
+teacher-web also at 26 tests / clean build after the SessionStatus widening.
