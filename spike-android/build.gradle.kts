@@ -35,6 +35,15 @@ android {
             "USE_FOREGROUND_SERVICE",
             (localProps.getProperty("spike.useForegroundService") ?: "true")
         )
+        buildConfigField(
+            "String", "TURN_URL", "\"${localProps.getProperty("turn.url") ?: ""}\""
+        )
+        buildConfigField(
+            "String", "TURN_USER", "\"${localProps.getProperty("turn.user") ?: ""}\""
+        )
+        buildConfigField(
+            "String", "TURN_PASS", "\"${localProps.getProperty("turn.pass") ?: ""}\""
+        )
     }
 
     buildFeatures {

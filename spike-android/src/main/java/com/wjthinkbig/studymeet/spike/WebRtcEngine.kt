@@ -108,10 +108,22 @@ class WebRtcEngine(
         remoteSinks: List<VideoSink>,
     ) {
         val pcFactory = factory ?: return
-        val iceServers = listOf(
-            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302")
-                .createIceServer()
-        )
+        // TURN은 빌드 타임에 선택적이다. local.properties에 turn.url이 없으면
+        // STUN만으로 동작한다 — 이것이 릴레이 비율 측정의 "before" 절반이다.
+        val iceServers = buildList {
+            add(
+                PeerConnection.IceServer.builder("stun:stun.l.google.com:19302")
+                    .createIceServer()
+            )
+            if (BuildConfig.TURN_URL.isNotBlank()) {
+                add(
+                    PeerConnection.IceServer.builder(BuildConfig.TURN_URL)
+                        .setUsername(BuildConfig.TURN_USER)
+                        .setPassword(BuildConfig.TURN_PASS)
+                        .createIceServer()
+                )
+            }
+        }
 
         val pc = pcFactory.createPeerConnection(
             PeerConnection.RTCConfiguration(iceServers).apply {
@@ -138,6 +150,47 @@ class WebRtcEngine(
                 override fun onIceConnectionChange(state: PeerConnection.IceConnectionState) {
                     // 설계 §4.3의 이탈 교차 확인 경로. 스파이크에서는 로그만 남긴다.
                     android.util.Log.i("PipSpike", "iceConnectionState=$state")
+                    if (state != PeerConnection.IceConnectionState.CONNECTED) return
+
+                    // getStats 콜백은 비동기로 온다. release()가 그 사이 peerConnection을
+                    // null로 만들 수 있으므로 호출 시점에 로컬로 스냅샷한다.
+                    val pc = peerConnection
+                    if (pc == null) {
+                        android.util.Log.w(
+                            "PipSpike",
+                            "selectedCandidatePair localType=NONE_FOUND reason=peerConnectionReleased",
+                        )
+                        return
+                    }
+                    pc.getStats { report ->
+                        // RTCStats.type/members, RTCStatsReport.statsMap 접근자 이름과
+                        // "candidate-pair"/"state"/"succeeded"/"localCandidateId"/"candidateType"
+                        // 멤버 키는 io.github.webrtc-sdk:android:144.7559.09의 classes.jar(javap)와
+                        // libjingle_peerconnection_so.so 문자열 상수로 확인했다 (task-6-report.md 참고).
+                        val succeededPairs = report.statsMap.values.filter {
+                            it.type == "candidate-pair" && it.members["state"] == "succeeded"
+                        }
+                        if (succeededPairs.isEmpty()) {
+                            // CONNECTED인데 succeeded pair가 없다 — 태블릿에서 보는 사람이
+                            // "측정 실패"와 "relay 없음"을 헷갈리면 안 되므로 명시적으로 남긴다.
+                            android.util.Log.w(
+                                "PipSpike",
+                                "selectedCandidatePair localType=NONE_FOUND reason=noSucceededPairInStats",
+                            )
+                            return@getStats
+                        }
+                        succeededPairs.forEach { pair ->
+                            val localId = pair.members["localCandidateId"] as? String
+                            val local = localId?.let { report.statsMap[it] }
+                            val candidateType = local?.members?.get("candidateType") as? String
+                            // host=같은 LAN 직결, srflx=STUN NAT 통과, relay=TURN 중계(서버 대역폭 사용).
+                            val localType = candidateType ?: "TYPE_UNKNOWN"
+                            android.util.Log.i(
+                                "PipSpike",
+                                "selectedCandidatePair localType=$localType",
+                            )
+                        }
+                    }
                 }
 
                 override fun onSignalingChange(state: PeerConnection.SignalingState) {}
