@@ -3,6 +3,7 @@ import type { TeacherApi } from '../api/client'
 import type { DataMessage, PageState, PresenceState, SessionSummary } from '../domain/types'
 import { applyPageSync, nextLocalPage } from '../domain/pageSync'
 import { accumulateDisconnected } from '../domain/presence'
+import { debounce } from '../domain/autosave'
 import { useSession } from '../webrtc/useSession'
 import { TopBar } from '../components/TopBar'
 import { BookViewer } from '../components/BookViewer'
@@ -26,6 +27,9 @@ export function Lesson({ api, session, onEnded }: {
   const startedAt = useRef(Date.now())
   const noteRef = useRef('')
   noteRef.current = note
+  const saveNote = useRef(
+    debounce((text: string) => { void api.saveNote(session.sessionId, text) }, 3000),
+  ).current
   const pageRef = useRef<PageState>({ pageNo: 1, counter: 0, by: 'teacher' })
   pageRef.current = page
   const presenceRef = useRef<PresenceState>('IN_CLASS')
@@ -98,6 +102,7 @@ export function Lesson({ api, session, onEnded }: {
   }
 
   const end = async () => {
+    saveNote.flush()
     await api.endSession(session.sessionId, noteRef.current, Math.round(disconnectedMs / 1000))
     onEnded()
   }
@@ -126,7 +131,7 @@ export function Lesson({ api, session, onEnded }: {
           <video ref={localRef} autoPlay playsInline muted style={{ flex: 1, background: '#000', minHeight: 0 }} />
           <textarea
             value={note}
-            onChange={(e) => setNote(e.target.value)}
+            onChange={(e) => { setNote(e.target.value); saveNote(e.target.value) }}
             placeholder="메모"
             style={{ height: 120, resize: 'none' }}
           />

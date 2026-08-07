@@ -3,6 +3,7 @@ import type { TeacherApi } from './client'
 
 export interface StubApi extends TeacherApi {
   lastEnd: { sessionId: string; note: string; disconnectedSec: number } | null
+  lastNote: { sessionId: string; note: string } | null
 }
 
 /**
@@ -38,6 +39,7 @@ export function createStubApi(): StubApi {
 
   const api: StubApi = {
     lastEnd: null,
+    lastNote: null,
 
     async listSessions() {
       return [...sessions].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
@@ -53,6 +55,10 @@ export function createStubApi(): StubApi {
 
     async endSession(sessionId, note, disconnectedSec) {
       api.lastEnd = { sessionId, note, disconnectedSec }
+    },
+
+    async saveNote(sessionId, note) {
+      api.lastNote = { sessionId, note }
     },
 
     async getToken(sessionId) {
