@@ -94,8 +94,8 @@ Create `teacher-web/package.json`:
   },
   "devDependencies": {
     "@testing-library/react": "16.3.2",
-    "@types/react": "19.2.8",
-    "@types/react-dom": "19.2.8",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
     "@vitejs/plugin-react": "6.0.5",
     "jsdom": "30.0.1",
     "typescript": "7.0.2",
@@ -226,6 +226,8 @@ npm run build
 ```
 
 Expected: `npm test` 는 1 passed, `npm run build` 는 `tsc --noEmit` 통과 후 `dist/` 생성.
+
+> `@types/react` 와 `@types/react-dom` 은 React 자체와 **버전이 따로 논다.** React가 19.2.8이어도 타입 패키지는 각각 19.2.18과 19.2.4다. 같은 번호일 것이라 가정하면 `npm install` 이 `ETARGET` 으로 죽는다.
 
 **TypeScript 7 관련 오류가 나면 여기서 멈추고 보고한다.** 흔한 증상: `@vitejs/plugin-react` 나 `vitest` 가 TS 7의 타입 정의를 못 읽음, `tsc` 가 알 수 없는 옵션을 거부함.
 
