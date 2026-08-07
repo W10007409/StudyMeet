@@ -538,6 +538,19 @@ git commit -m "feat(scheduling): add cancellation, no-show and credit rules with
 
 - [ ] **Step 1: 스키마 작성**
 
+> **Prisma 7 은 `datasource` 블록 안의 `url = env(...)` 를 더 이상 받지 않는다** (P1012). 접속 문자열은 별도 설정 파일로 옮겨졌다. 그래서 스키마에는 `provider` 만 두고, 아래 `prisma.config.ts` 가 URL을 공급한다.
+
+Create `scheduling/prisma.config.ts`:
+
+```typescript
+import 'dotenv/config'
+import { defineConfig, env } from 'prisma/config'
+
+export default defineConfig({
+  datasource: { url: env('DATABASE_URL') },
+})
+```
+
 Create `scheduling/prisma/schema.prisma`:
 
 ```prisma
@@ -547,7 +560,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model Teacher {
