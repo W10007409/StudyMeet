@@ -57,5 +57,18 @@ WebRTC는 가능한 로컬×원격 후보 조합마다 연결성 검사를 돌�
 | `succeededPairs=<n>` | 그 순간 `state=succeeded` 로 보고된 candidate-pair 총 개수 |
 | `nominatedPairs=<n>` | (다중 nominated 케이스에서만) `nominated=true` 로 보고된 pair 개수 |
 
-`nominated=true` 이거나 (ambiguous 묶음에서) 유일하게 `relay` 인 pair의 비율이 곧 설계 §3.1의
-릴레이 비율이다. `ambiguous=true` 줄들만 있는 연결은 자동 집계에서 빼고 별도로 표시한다.
+**릴레이 비율 집계 규칙 (하나만 따른다):**
+
+- 분모·분자는 **`nominated=true` 이면서 `ambiguous=true` 가 아닌** 줄만으로 센다. 분자는 그중
+  `localType=relay`, 분모는 그런 줄 전체다. (`srflx`/`prflx`는 위 표대로 직결로 센다 — 릴레이가
+  아니다.)
+- `ambiguous=true` 가 붙은 연결은 **자동 집계에서 제외**하고 "판정 불가" 개수로 따로 기록한다.
+  ambiguous 묶음 안에 `relay` 타입이 하나뿐이더라도 그것을 정답으로 추측해서 세지 않는다 —
+  `ambiguous=true` 는 애초에 그 판단을 할 수 없다는 뜻이다.
+- `localType=NONE_FOUND` 도 마찬가지로 집계에서 제외하고 따로 센다.
+- 판정 불가(ambiguous + NONE_FOUND) 비율이 높으면 그 자체가 결과다 — 측정 방법을 고쳐야 한다는
+  신호이며, 그 상태로 릴레이 비율 숫자만 뽑아 보고하면 안 된다.
+
+`iceConnectionState=CONNECTED` 는 찍혔는데 뒤따르는 `selectedCandidatePair` 줄이 없으면
+측정이 유실된 것이므로 (getStats 콜백이 비동기로 오는 도중 release로 유실됨) 그 조합을
+다시 돌린다.

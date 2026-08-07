@@ -162,6 +162,13 @@ class WebRtcEngine(
                         )
                         return
                     }
+                    // 아래 try/catch는 getStats 호출 "등록" 중 동기적으로 던지는 예외만 잡는다
+                    // (예: peerConnection이 이미 dispose된 경우의 IllegalStateException).
+                    // getStats 콜백 자체는 비동기라 등록 이후 release()가 콜백 도달 전에 네이티브
+                    // 쪽에서 콜백을 그냥 버리면, 이 CONNECTED 전이는 PipSpike 로그를 한 줄도 남기지
+                    // 못한 채 조용히 사라질 수 있다 — 어떤 try/catch로도 못 막는다. 그러니 로그에서
+                    // iceConnectionState=CONNECTED 는 보이는데 뒤따르는 selectedCandidatePair 줄이
+                    // 없다면 콜백이 유실된 것이니 그 네트워크 조합을 다시 측정해야 한다.
                     try {
                         pc.getStats { report ->
                             // RTCStats.type/members, RTCStatsReport.statsMap 접근자 이름과
