@@ -15,3 +15,6 @@ signaling/node_modules/
 .externalNativeBuild
 .cxx
 local.properties
+teacher-web/node_modules/
+teacher-web/dist/
+teacher-web/.env.local
