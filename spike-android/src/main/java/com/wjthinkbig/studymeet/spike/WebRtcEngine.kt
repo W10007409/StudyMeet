@@ -162,34 +162,88 @@ class WebRtcEngine(
                         )
                         return
                     }
-                    pc.getStats { report ->
-                        // RTCStats.type/members, RTCStatsReport.statsMap 접근자 이름과
-                        // "candidate-pair"/"state"/"succeeded"/"localCandidateId"/"candidateType"
-                        // 멤버 키는 io.github.webrtc-sdk:android:144.7559.09의 classes.jar(javap)와
-                        // libjingle_peerconnection_so.so 문자열 상수로 확인했다 (task-6-report.md 참고).
-                        val succeededPairs = report.statsMap.values.filter {
-                            it.type == "candidate-pair" && it.members["state"] == "succeeded"
+                    try {
+                        pc.getStats { report ->
+                            // RTCStats.type/members, RTCStatsReport.statsMap 접근자 이름과
+                            // "candidate-pair"/"state"/"succeeded"/"localCandidateId"/"candidateType"/
+                            // "nominated" 멤버 키는 io.github.webrtc-sdk:android:144.7559.09의
+                            // classes.jar(javap)와 libjingle_peerconnection_so.so 문자열 상수로
+                            // 확인했다 (task-6-report.md 참고).
+                            val succeededPairs = report.statsMap.values.filter {
+                                it.type == "candidate-pair" && it.members["state"] == "succeeded"
+                            }
+                            if (succeededPairs.isEmpty()) {
+                                // CONNECTED인데 succeeded pair가 없다 — 태블릿에서 보는 사람이
+                                // "측정 실패"와 "relay 없음"을 헷갈리면 안 되므로 명시적으로 남긴다.
+                                android.util.Log.w(
+                                    "PipSpike",
+                                    "selectedCandidatePair localType=NONE_FOUND reason=noSucceededPairInStats",
+                                )
+                                return@getStats
+                            }
+
+                            fun localTypeOf(pair: org.webrtc.RTCStats): String {
+                                val localId = pair.members["localCandidateId"] as? String
+                                val local = localId?.let { report.statsMap[it] }
+                                val candidateType = local?.members?.get("candidateType") as? String
+                                // host=같은 LAN 직결, srflx=STUN NAT 통과, relay=TURN 중계(서버 대역폭
+                                // 사용), prflx=NAT가 주소를 재작성해 발견된 직결 후보(srflx와 같은 편).
+                                return candidateType ?: "TYPE_UNKNOWN"
+                            }
+
+                            // WebRTC는 가능한 로컬×원격 조합마다 연결성 검사를 돌리고, 이 토폴로지는
+                            // STUN과 (설정됐다면) TURN 후보를 동시에 제공하므로 host/srflx pair와
+                            // relay pair가 둘 다 succeeded로 나올 수 있다. 실제로 미디어를 나른 pair는
+                            // members["nominated"]==true 인 pair뿐이다.
+                            val nominatedPairs = succeededPairs.filter { it.members["nominated"] == true }
+                            when (nominatedPairs.size) {
+                                1 -> {
+                                    val pair = nominatedPairs.single()
+                                    android.util.Log.i(
+                                        "PipSpike",
+                                        "selectedCandidatePair localType=${localTypeOf(pair)} " +
+                                            "nominated=true succeededPairs=${succeededPairs.size}",
+                                    )
+                                }
+                                0 -> {
+                                    // 이 libwebrtc 빌드에서 nominated 키가 없거나 믿을 수 없다 — succeeded
+                                    // pair 전부를 남기되, 이 중 하나만 정답이라고 단정할 수 없다는 걸
+                                    // 로그에 명시해서 tally하는 사람이 착각하지 않게 한다.
+                                    succeededPairs.forEach { pair ->
+                                        android.util.Log.w(
+                                            "PipSpike",
+                                            "selectedCandidatePair localType=${localTypeOf(pair)} " +
+                                                "nominated=unknown ambiguous=true " +
+                                                "reason=noPairReportedNominated " +
+                                                "succeededPairs=${succeededPairs.size}",
+                                        )
+                                    }
+                                }
+                                else -> {
+                                    // 정상이라면 일어나지 않는다. 그래도 하나를 임의로 골라 조용히
+                                    // 정답인 척하지 않고 전부와 개수를 남긴다.
+                                    nominatedPairs.forEach { pair ->
+                                        android.util.Log.w(
+                                            "PipSpike",
+                                            "selectedCandidatePair localType=${localTypeOf(pair)} " +
+                                                "nominated=true ambiguous=true " +
+                                                "reason=multiplePairsReportedNominated " +
+                                                "succeededPairs=${succeededPairs.size} " +
+                                                "nominatedPairs=${nominatedPairs.size}",
+                                        )
+                                    }
+                                }
+                            }
                         }
-                        if (succeededPairs.isEmpty()) {
-                            // CONNECTED인데 succeeded pair가 없다 — 태블릿에서 보는 사람이
-                            // "측정 실패"와 "relay 없음"을 헷갈리면 안 되므로 명시적으로 남긴다.
-                            android.util.Log.w(
-                                "PipSpike",
-                                "selectedCandidatePair localType=NONE_FOUND reason=noSucceededPairInStats",
-                            )
-                            return@getStats
-                        }
-                        succeededPairs.forEach { pair ->
-                            val localId = pair.members["localCandidateId"] as? String
-                            val local = localId?.let { report.statsMap[it] }
-                            val candidateType = local?.members?.get("candidateType") as? String
-                            // host=같은 LAN 직결, srflx=STUN NAT 통과, relay=TURN 중계(서버 대역폭 사용).
-                            val localType = candidateType ?: "TYPE_UNKNOWN"
-                            android.util.Log.i(
-                                "PipSpike",
-                                "selectedCandidatePair localType=$localType",
-                            )
-                        }
+                    } catch (e: Throwable) {
+                        // release()가 다른 스레드에서 peerConnection을 네이티브까지 해제했을 수 있다
+                        // (스냅샷 이후, getStats 호출 또는 콜백 도달 이전). 그러면 크래시나 조용한 유실
+                        // 대신 측정 실패를 로그로 남긴다.
+                        android.util.Log.w(
+                            "PipSpike",
+                            "selectedCandidatePair localType=NONE_FOUND " +
+                                "reason=getStatsThrew:${e.javaClass.simpleName}",
+                        )
                     }
                 }
 
