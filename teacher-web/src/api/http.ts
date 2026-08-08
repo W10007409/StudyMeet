@@ -1,5 +1,5 @@
 import type { Readiness, SessionSummary } from '../domain/types'
-import type { TeacherApi } from './client'
+import type { MakeupSlots, TeacherApi } from './client'
 
 /**
  * 계약 불일치: TeacherApi.listSessions(date) 에는 teacherId 가 없지만, 실제 라우트는
@@ -29,13 +29,28 @@ async function extractErrorMessage(res: Response): Promise<string> {
 }
 
 /**
+ * status 를 던지는 쪽에 실어 보낸다 — 409(슬롯 충돌 등, 선생님이 다른 시간을 고르면 회복되는 상황)와
+ * 그 밖의 실패(서버 오류 등, 회복 방법이 다른 상황)를 화면이 구분할 수 있어야 한다.
+ * 잃은 예약을 성공으로 오해하게 두는 것이 이 경로가 막으려는 실패다.
+ */
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+/**
  * 조용한 실패가 더 위험하다 — 선생님이 낡거나 없는 데이터를 보고도 모르는 상태가 되면 안 된다.
  * non-OK 응답은 상태 코드와 서버 메시지를 담아 던진다.
  */
 async function assertOk(res: Response, action: string): Promise<void> {
   if (!res.ok) {
     const message = await extractErrorMessage(res)
-    throw new Error(`${action} 실패 (HTTP ${res.status}): ${message}`)
+    throw new ApiError(res.status, `${action} 실패 (HTTP ${res.status}): ${message}`)
   }
 }
 
@@ -92,6 +107,35 @@ export function createHttpApi(baseUrl: string): TeacherApi {
       const res = await fetch(`${baseUrl}/contacts/${studentId}/reveal`, { method: 'POST' })
       await assertOk(res, '연락처 열람')
       return res.json() as Promise<{ phone: string }>
+    },
+
+    /**
+     * 마감을 넘긴 취소도 서버는 200 으로 받아 CANCELLED 대신 NO_SHOW 를 기록한다
+     * (scheduling/src/routes/makeup.ts) — 늦은 취소는 오류가 아니므로 여기서도 던지지 않는다.
+     * 이미 처리된 세션의 재취소(409)나 세션 없음(404)만 assertOk 가 던진다.
+     */
+    async cancelSession(sessionId) {
+      const res = await fetch(`${baseUrl}/sessions/${sessionId}/cancel`, { method: 'POST' })
+      await assertOk(res, '세션 취소')
+      return res.json() as Promise<{ status: 'CANCELLED' | 'NO_SHOW' }>
+    },
+
+    async getMakeupSlots(from, to) {
+      const res = await fetch(
+        `${baseUrl}/teacher/${teacherId()}/makeup-slots?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      )
+      await assertOk(res, '보강 슬롯 조회')
+      return res.json() as Promise<MakeupSlots>
+    },
+
+    /** 크레딧 없음(400)과 슬롯 충돌(409)을 서버가 구분해 보낸다 — assertOk 가 상태 코드를 실어 던진다. */
+    async bookMakeup(enrollmentId, scheduledAt) {
+      const res = await fetch(`${baseUrl}/makeups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enrollmentId, scheduledAt }),
+      })
+      await assertOk(res, '보강 예약')
     },
   }
 }
