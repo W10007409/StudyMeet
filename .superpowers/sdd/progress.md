@@ -162,3 +162,12 @@ and the student credit list. Backend endpoints already exist and were
 verified against live Postgres.
 Tasks 3-5 are prose rather than complete code - the same thinness that
 produced this session's two worst defects in the backend. The plan says so.
+scheduling screens Task 1-5: complete (10cd656..1fe53f9)
+  Helpers, api layer, three screens, date navigation. All five browser
+  checks passed against live Postgres; the apparent balance-vs-ledger
+  mismatch was traced to the seed script, not the backend.
+  GAP FOUND AND CLOSED: SessionList showed only today, so with a 24-hour
+  cancellation cutoff the lessons worth cancelling were unreachable and
+  every possible cancellation became a no-show.
+  KNOWN: stub listSessions ignores its date argument, so the empty-day
+  state cannot be exercised without a backend.
