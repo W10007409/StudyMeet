@@ -70,6 +70,8 @@ model Session {
   note            String        @default("")
   disconnectedSec Int           @default(0)
   endedAt         DateTime?     @db.Timestamptz(3)
+  startedAt       DateTime?     @db.Timestamptz(3)
+  lastHeartbeatAt DateTime?     @db.Timestamptz(3)
   enrollment      Enrollment    @relation(fields: [enrollmentId], references: [id])
   teacher         Teacher       @relation(fields: [teacherId], references: [id])
 

@@ -44,6 +44,37 @@ export const sessionRoutes: FastifyPluginAsync<Deps> = async (app, { prisma }) =
     return { delivered: false, reason: 'FCM_NOT_CONFIGURED' }
   })
 
+  app.post<{ Params: { id: string } }>('/sessions/:id/start', async (request, reply) => {
+    const session = await prisma.session.findUnique({ where: { id: request.params.id } })
+    if (!session) return sendNotFound(reply)
+
+    if (session.status !== 'SCHEDULED' && session.status !== 'LOBBY_OPEN') {
+      return reply.code(409).send({ error: '이미 시작됐거나 종료된 세션이다' })
+    }
+
+    const now = new Date()
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { status: 'IN_PROGRESS', startedAt: now, lastHeartbeatAt: now },
+    })
+    return reply.code(204).send()
+  })
+
+  app.post<{ Params: { id: string } }>('/sessions/:id/heartbeat', async (request, reply) => {
+    // 초당 100회 규모로 들어온다. 읽고-쓰는 왕복 대신 상태 조건을 건 단일 updateMany 로
+    // 처리하고, 영향 행 수로 결과를 판단한다 (읽기-쓰기 사이의 경합을 없앤다).
+    const result = await prisma.session.updateMany({
+      where: { id: request.params.id, status: 'IN_PROGRESS' },
+      data: { lastHeartbeatAt: new Date() },
+    })
+    if (result.count === 0) {
+      const session = await prisma.session.findUnique({ where: { id: request.params.id } })
+      if (!session) return sendNotFound(reply)
+      return reply.code(409).send({ error: '진행 중인 세션이 아니다' })
+    }
+    return reply.code(204).send()
+  })
+
   app.put<{ Params: { id: string } }>('/sessions/:id/note', async (request, reply) => {
     const parsed = NoteBody.safeParse(request.body)
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues })
