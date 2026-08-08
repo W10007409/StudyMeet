@@ -183,3 +183,12 @@ Two gaps this closed:
     "in progress" count would always have read zero.
   - The 90-second teacher-disconnect auto-close in the main design had no
     implementation path; the heartbeat is what finally makes it possible.
+
+=== NEW PLAN: operator monitoring (252c74e) ===
+docs/superpowers/plans/2026-08-08-operator-monitoring-implementation.md
+Six tasks. Auth deferred by decision, so the plan carries the interim guard:
+127.0.0.1 binding plus a shared-secret header, and the server refuses to
+start without the secret set. Not auth - it only stops accidental exposure.
+Task 3 finally implements the 90-second stale-session close the main design
+agreed to long ago and never had a path for. It deliberately issues no
+credit: a dead teacher browser is not a child's absence.
