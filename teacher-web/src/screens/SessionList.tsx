@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { TeacherApi } from '../api/client'
 import type { SessionSummary } from '../domain/types'
-import { canRequestCancel, isLateCancel } from '../domain/scheduling'
+import { canRequestCancel, isLateCancel, kstDatePlus, kstToday } from '../domain/scheduling'
 
 /** 설계 §4.3 — 종료해도 예정 시각 +30분 안이면 다시 들어갈 수 있다. */
 function canEnter(s: SessionSummary): boolean {
@@ -16,12 +16,13 @@ export function SessionList({ api, onEnter, onStudents }: {
   onEnter: (s: SessionSummary) => void
   onStudents: () => void
 }) {
+  const [date, setDate] = useState(() => kstToday(new Date()))
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [cancelResult, setCancelResult] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    void api.listSessions(new Date().toISOString().slice(0, 10)).then(setSessions)
-  }, [api])
+    void api.listSessions(date).then(setSessions)
+  }, [api, date])
 
   useEffect(() => { load() }, [load])
 
@@ -43,29 +44,40 @@ export function SessionList({ api, onEnter, onStudents }: {
     <div style={{ padding: 24 }}>
       <button onClick={onStudents}>담당 학생</button>
       <h1>오늘 수업</h1>
+      {/* 휴강 마감이 24시간이라, 취소할 만한 수업은 대부분 내일 이후다. 날짜를 옮길 수 있어야 마감 안에서 휴강할 수 있다. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <button onClick={() => setDate((d) => kstDatePlus(d, -1))}>◀</button>
+        <span>{date}</span>
+        <button onClick={() => setDate((d) => kstDatePlus(d, 1))}>▶</button>
+        <button onClick={() => setDate(kstToday(new Date()))}>오늘</button>
+      </div>
       {cancelResult && <p>{cancelResult}</p>}
-      <table>
-        <tbody>
-          {sessions.map((s) => (
-            <tr key={s.sessionId}>
-              <td>{s.scheduledAt.slice(11, 16)}</td>
-              <td>{s.studentName}</td>
-              <td>{s.bookTitle}</td>
-              <td>
-                {/* 시작 5분 전부터만 입장할 수 있다. 설계 §4.1. 종료해도 예정 시각 +30분 안이면 재입장 가능. 설계 §4.3 */}
-                <button disabled={!canEnter(s)} onClick={() => onEnter(s)}>
-                  {s.status === 'ENDED' ? '다시 입장' : '입장'}
-                </button>
-              </td>
-              <td>
-                {canRequestCancel(s) && (
-                  <button onClick={() => void cancel(s)}>휴강</button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {sessions.length === 0 ? (
+        <p>이 날짜에는 수업이 없습니다.</p>
+      ) : (
+        <table>
+          <tbody>
+            {sessions.map((s) => (
+              <tr key={s.sessionId}>
+                <td>{s.scheduledAt.slice(11, 16)}</td>
+                <td>{s.studentName}</td>
+                <td>{s.bookTitle}</td>
+                <td>
+                  {/* 시작 5분 전부터만 입장할 수 있다. 설계 §4.1. 종료해도 예정 시각 +30분 안이면 재입장 가능. 설계 §4.3 */}
+                  <button disabled={!canEnter(s)} onClick={() => onEnter(s)}>
+                    {s.status === 'ENDED' ? '다시 입장' : '입장'}
+                  </button>
+                </td>
+                <td>
+                  {canRequestCancel(s) && (
+                    <button onClick={() => void cancel(s)}>휴강</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }
