@@ -171,3 +171,15 @@ scheduling screens Task 1-5: complete (10cd656..1fe53f9)
   every possible cancellation became a no-show.
   KNOWN: stub listSessions ignores its date argument, so the empty-day
   state cannot be exercised without a backend.
+
+=== NEW SPEC: operator monitoring (77c4513) ===
+docs/superpowers/specs/2026-08-08-operator-monitoring-design.md
+Monitoring only - registration, assignment and timetable editing are out of
+scope, which removed CSV import and bulk forms entirely.
+Order is auth first, because the operator screen shows every child's
+guardian contact and there is currently no auth at all.
+Two gaps this closed:
+  - IN_PROGRESS existed in the type and nothing ever wrote it, so a live
+    "in progress" count would always have read zero.
+  - The 90-second teacher-disconnect auto-close in the main design had no
+    implementation path; the heartbeat is what finally makes it possible.
