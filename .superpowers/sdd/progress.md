@@ -145,3 +145,12 @@ scheduling Task 6+7: complete (51d1093..bfad638, reviewed together, 1 fix pass)
 === scheduling backend PLAN COMPLETE: Tasks 1-7 ===
 22 tests, clean build, all endpoints verified against live Postgres.
 teacher-web also at 26 tests / clean build after the SessionStatus widening.
+
+=== STUB -> HTTP SWAP: complete (d095441) ===
+teacher-web now talks to the real scheduling backend. Seeded 23:58:52+09:00
+displayed as 23:58 in the UI - no offset. The interface held: no TeacherApi
+method signature changed.
+Caught only by driving a real browser: @fastify/cors defaults methods to
+GET,HEAD,POST, so PUT was blocked and saveNote silently failed. curl does
+not enforce CORS, so it was invisible until then.
+Stopgap recorded in the spec: VITE_TEACHER_ID stands in for auth.
