@@ -154,3 +154,11 @@ Caught only by driving a real browser: @fastify/cors defaults methods to
 GET,HEAD,POST, so PUT was blocked and saveNote silently failed. curl does
 not enforce CORS, so it was invisible until then.
 Stopgap recorded in the spec: VITE_TEACHER_ID stands in for auth.
+
+=== NEW PLAN: teacher scheduling screens (0584175) ===
+Plan: docs/superpowers/plans/2026-08-08-teacher-scheduling-screens.md
+Fills the gap between the two earlier plans: cancellation, makeup booking
+and the student credit list. Backend endpoints already exist and were
+verified against live Postgres.
+Tasks 3-5 are prose rather than complete code - the same thinness that
+produced this session's two worst defects in the backend. The plan says so.
