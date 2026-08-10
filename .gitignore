@@ -20,3 +20,6 @@ teacher-web/dist/
 teacher-web/.env.local
 scheduling/node_modules/
 scheduling/.env
+admin-web/node_modules/
+admin-web/dist/
+admin-web/.env.local
