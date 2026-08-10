@@ -45,18 +45,18 @@ export const sessionRoutes: FastifyPluginAsync<Deps> = async (app, { prisma }) =
   })
 
   app.post<{ Params: { id: string } }>('/sessions/:id/start', async (request, reply) => {
-    const session = await prisma.session.findUnique({ where: { id: request.params.id } })
-    if (!session) return sendNotFound(reply)
-
-    if (session.status !== 'SCHEDULED' && session.status !== 'LOBBY_OPEN') {
-      return reply.code(409).send({ error: '이미 시작됐거나 종료된 세션이다' })
-    }
-
+    // heartbeat 와 같은 이유로 읽고-쓰는 왕복 대신 상태 조건을 건 단일 updateMany 를 쓴다 —
+    // 더블클릭·재시도로 거의 동시에 두 요청이 들어와도 먼저 조건을 통과한 하나만 startedAt 을 쓴다.
     const now = new Date()
-    await prisma.session.update({
-      where: { id: session.id },
+    const result = await prisma.session.updateMany({
+      where: { id: request.params.id, status: { in: ['SCHEDULED', 'LOBBY_OPEN'] } },
       data: { status: 'IN_PROGRESS', startedAt: now, lastHeartbeatAt: now },
     })
+    if (result.count === 0) {
+      const session = await prisma.session.findUnique({ where: { id: request.params.id } })
+      if (!session) return sendNotFound(reply)
+      return reply.code(409).send({ error: '이미 시작됐거나 종료된 세션이다' })
+    }
     return reply.code(204).send()
   })
 
@@ -96,7 +96,7 @@ export const sessionRoutes: FastifyPluginAsync<Deps> = async (app, { prisma }) =
     const session = await prisma.session.findUnique({ where: { id: request.params.id } })
     if (!session) return sendNotFound(reply)
 
-    if (session.status !== 'SCHEDULED') {
+    if (session.status !== 'SCHEDULED' && session.status !== 'IN_PROGRESS') {
       return reply.code(409).send({ error: '이미 처리된 세션이다' })
     }
 

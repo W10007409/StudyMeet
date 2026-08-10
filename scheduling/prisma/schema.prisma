@@ -68,6 +68,10 @@ model Session {
   /// 반복 규칙에서 생성됐는지, 추가 예약·보강인지
   isMakeup        Boolean       @default(false)
   note            String        @default("")
+  /// 리퍼(reapStale)가 자동 종료 사유를 남기는 전용 칸. note 와 분리한 이유는
+  /// PUT /sessions/:id/note 가 상태 가드 없이 note 를 통째로 덮어써서, 같은 칸에 두면
+  /// 이후 편집 한 번에 자동 종료 사유가 조용히 사라지기 때문이다.
+  endedReason     String?
   disconnectedSec Int           @default(0)
   endedAt         DateTime?     @db.Timestamptz(3)
   startedAt       DateTime?     @db.Timestamptz(3)

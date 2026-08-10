@@ -49,7 +49,11 @@ export const makeupRoutes: FastifyPluginAsync<Deps> = async (app, { prisma }) =>
     const session = await prisma.session.findUnique({ where: { id: request.params.id } })
     if (!session) return sendNotFound(reply, '세션을 찾을 수 없다')
 
-    if (session.status !== 'SCHEDULED') {
+    if (
+      session.status !== 'SCHEDULED' &&
+      session.status !== 'LOBBY_OPEN' &&
+      session.status !== 'IN_PROGRESS'
+    ) {
       return reply.code(409).send({ error: '이미 처리된 세션이다' })
     }
 
