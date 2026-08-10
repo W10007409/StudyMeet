@@ -97,6 +97,16 @@ export function createHttpApi(baseUrl: string): TeacherApi {
       await assertOk(res, '메모 저장')
     },
 
+    async startSession(sessionId) {
+      const res = await fetch(`${baseUrl}/sessions/${sessionId}/start`, { method: 'POST' })
+      await assertOk(res, '수업 시작')
+    },
+
+    async heartbeat(sessionId) {
+      const res = await fetch(`${baseUrl}/sessions/${sessionId}/heartbeat`, { method: 'POST' })
+      await assertOk(res, '생존신호')
+    },
+
     async getToken(sessionId) {
       const res = await fetch(`${baseUrl}/sessions/${sessionId}/token`)
       await assertOk(res, '접속 정보 조회')

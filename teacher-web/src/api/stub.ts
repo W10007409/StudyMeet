@@ -114,6 +114,15 @@ export function createStubApi(): StubApi {
       api.lastNote = { sessionId, note }
     },
 
+    async startSession(sessionId) {
+      const target = sessions.find((s) => s.sessionId === sessionId)
+      if (target) target.status = 'IN_PROGRESS'
+    },
+
+    async heartbeat() {
+      // 스텁은 생존신호를 관측할 상태가 없다 — 호출이 성공한다는 계약만 흉내낸다.
+    },
+
     async getToken(sessionId) {
       return {
         signalingUrl: import.meta.env.VITE_SIGNALING_URL ?? 'ws://localhost:8080',

@@ -9,6 +9,9 @@ import { TopBar } from '../components/TopBar'
 import { BookViewer } from '../components/BookViewer'
 
 const TOTAL_PAGES = 48
+/** scheduling/src/domain/liveness.ts 의 HEARTBEAT_INTERVAL_MS 와 같은 값. 백엔드 패키지가
+ * 달라 임포트할 수 없으므로 프론트에 상수로 둔다 — 값을 바꾸려면 양쪽을 같이 고친다. */
+const HEARTBEAT_INTERVAL_MS = 30_000
 
 export function Lesson({ api, session, onEnded }: {
   api: TeacherApi
@@ -60,6 +63,36 @@ export function Lesson({ api, session, onEnded }: {
   useEffect(() => {
     void api.getToken(session.sessionId).then(setConn)
   }, [api, session.sessionId])
+
+  // startSession 은 접속 정보가 도착한 뒤 딱 한 번만 부른다 — 마운트 시점에 부르면
+  // 실제로 시작하지 않은 수업까지 진행 중으로 기록된다. 실패(이미 시작됨, 네트워크
+  // 순단)해도 화면은 계속 진행한다: 운영자 집계가 틀리는 것이 아이가 수업을 못 받는
+  // 것보다 훨씬 작은 손해다. 생존신호는 별도 타이머다 — 1초 틱과 주기도 목적도 다르고,
+  // 실패해도 화면에 띄우지 않는다(선생님이 할 수 있는 일이 없다). 인터벌 ID는 그려지는
+  // 값이 아니므로 state 가 아니라 ref 에 둔다 — 이 화면의 표준 규칙.
+  const startedRef = useRef(false)
+  const heartbeatIdRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => {
+    if (conn === null || startedRef.current) return
+    startedRef.current = true
+
+    void api.startSession(session.sessionId).catch((err: unknown) => {
+      console.warn('startSession 실패 — 수업은 계속 진행한다', err)
+    })
+
+    heartbeatIdRef.current = setInterval(() => {
+      void api.heartbeat(session.sessionId).catch((err: unknown) => {
+        console.warn('heartbeat 실패 — 화면에는 띄우지 않는다', err)
+      })
+    }, HEARTBEAT_INTERVAL_MS)
+
+    return () => {
+      if (heartbeatIdRef.current !== null) {
+        clearInterval(heartbeatIdRef.current)
+        heartbeatIdRef.current = null
+      }
+    }
+  }, [api, session.sessionId, conn])
 
   const { localRef, remoteRef, send } = useSession({
     signalingUrl: conn?.signalingUrl ?? '',
