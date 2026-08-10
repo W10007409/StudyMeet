@@ -284,6 +284,8 @@ Create `scheduling/src/middleware/operatorOnly.ts`.
 
 `X-Operator-Secret` 헤더가 `process.env.OPERATOR_SECRET` 과 같지 않으면 **404** 를 돌려준다. 401이 아니라 404인 것은 의도다 — 엔드포인트의 존재 자체를 알리지 않는다.
 
+⚠️ **404 본문이 Fastify 기본값과 정확히 같아야 한다.** 직접 `{ error: 'Not Found' }` 를 돌려주면 필드가 2개인데 Fastify 기본 404는 3개(`message`, `error`, `statusCode`)다. 둘 다 404지만 **본문 모양이 달라서, 그것만 비교하면 어떤 `/operator/*` 경로가 실재하는지 알아낼 수 있다** — 404를 고른 이유가 통째로 무력해진다. 앱 수준 `setNotFoundHandler` 하나로 두 경로를 합류시킨다.
+
 `OPERATOR_SECRET` 이 설정되지 않았으면 **서버를 시작하지 않는다.** 빈 값으로 조용히 통과시키면 안전장치가 없는 채로 뜬다.
 
 파일 상단에 이것이 인증이 아니라는 사실과 설계 §2.1을 주석으로 남긴다.
@@ -305,6 +307,8 @@ Create `scheduling/src/routes/operator.ts`. 전부 `operatorOnly` 를 거친다.
 | `GET /operator/sessions?q=&date=` | 설계 §4.5 — 학생명·선생님명 검색 |
 
 `/operator/live` 는 10초마다 불린다. **목록을 세지 말고 `count` 질의를 쓴다.**
+
+그리고 **인덱스를 함께 넣는다** — `@@index([status, lastHeartbeatAt])`, `@@index([status, scheduledAt])`. `count` 는 행을 안 보낼 뿐 스캔은 그대로다. 수십만 행 테이블을 열린 탭마다 10초에 네 번 훑는다.
 
 `stale` 은 `IN_PROGRESS` 이면서 `lastHeartbeatAt` 이 90초를 넘긴 것이다 — Task 1의 상수를 쓰고 숫자를 다시 적지 않는다.
 

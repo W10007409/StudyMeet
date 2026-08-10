@@ -201,3 +201,15 @@ operator Task 1-3: complete (01ad171..e360cce, reviewed together, 1 fix pass)
   from a stale snapshot and could close a session that had just beaten;
   /start could reset startedAt under a double call; the auto-close reason
   lived in the note field the teacher can overwrite.
+operator Task 4-6: complete (1115c7b..24d15b2, reviewed together, 2 fix passes)
+  Operator API behind a shared secret, teacher screen reporting, admin-web.
+  END TO END VERIFIED: entering a lesson in a browser flips the DB to
+  IN_PROGRESS, the heartbeat advances, and /operator/live returns 1.
+  Fixes: the live counters were named for things the server cannot observe
+  (a "disconnected" count that actually measured teacher-browser lag); the
+  404 body differed from Fastify's default so route existence leaked; the
+  polled counts had no index behind them.
+
+=== operator monitoring PLAN COMPLETE: Tasks 1-6 ===
+scheduling 31 tests, teacher-web 35, all builds clean.
+NOT DEPLOYABLE until auth exists - see design 2.1.
