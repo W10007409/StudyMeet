@@ -47,41 +47,50 @@ export const operatorRoutes: FastifyPluginAsync<Deps> = async (app, { prisma }) 
   /**
    * 설계 §4.1 — 10초 폴링. 목록을 세지 않고 count 질의 넷을 쓴다
    * (수십만 행 테이블에서 findMany 로 배열을 만들어 length 를 재면 폴링 주기마다 비싸진다).
+   *
+   * 서버는 아이(학생) 쪽 연결 상태를 관측할 수 없다 — 미디어는 P2P 로 오가고, 아이의
+   * 상태는 선생님 브라우저까지만 DataChannel 로 닿는다. 그래서 이 응답에는 "아이가
+   * 끊겼다"고 말하는 필드가 없다 — heartbeatLate 는 선생님 브라우저의 생존신호 지연을
+   * 셀 뿐이다. 아이 쪽 연결을 운영자에게 보여주려면 지금은 없는 별도의 보고 경로
+   * (선생님 화면이 이미 아는 것을 서버로 전달하는 경로)가 필요하다 — 여기에 "아이 연결
+   * 끊김"을 추가하고 싶어지면, 그 경로부터 만들어야 한다.
    */
   app.get('/operator/live', async () => {
     const now = new Date()
     const staleCutoff = new Date(now.getTime() - STALE_AFTER_MS)
-    const disconnectedCutoff = new Date(now.getTime() - HEARTBEAT_INTERVAL_MS)
+    const heartbeatLateCutoff = new Date(now.getTime() - HEARTBEAT_INTERVAL_MS)
     const lobbyCutoff = new Date(now.getTime() + LOBBY_WINDOW_MS)
 
-    const [inProgress, stale, disconnected, notReady] = await Promise.all([
+    const [inProgress, stale, heartbeatLate, readinessUnknown] = await Promise.all([
       prisma.session.count({ where: { status: 'IN_PROGRESS' } }),
       // stale 은 리퍼(reapStale)가 실제로 정리하는 조건과 같아야 한다 — Task 1 의
       // STALE_AFTER_MS 를 그대로 쓰고 90(_000) 을 다시 적지 않는다.
       prisma.session.count({
         where: { status: 'IN_PROGRESS', lastHeartbeatAt: { lt: staleCutoff } },
       }),
-      // "연결 끊김" — 생존신호를 한 번 이상 놓쳤지만(30초 주기) 아직 리퍼가 정리할
+      // "신호 지연" — 생존신호를 한 번 이상 놓쳤지만(30초 주기) 아직 리퍼가 정리할
       // 90초에는 못 미친 세션. stale 과 겹치지 않는 이른 경고 구간이다. 서버는 학생-선생님
       // WebRTC 연결 상태를 보지 못한다(P2P 라 관측자가 선생님 브라우저뿐이고, 그 상태를
-      // 서버로 보내는 경로가 없다) — 그래서 서버가 실제로 가진 유일한 생존 신호인
-      // lastHeartbeatAt 으로 근사한다.
+      // 서버로 보내는 경로가 없다) — 그래서 서버가 실제로 가진 유일한 생존 신호인,
+      // 선생님 브라우저의 lastHeartbeatAt 으로 근사한다. 아이가 아니라 선생님 브라우저
+      // 이야기다.
       prisma.session.count({
         where: {
           status: 'IN_PROGRESS',
-          lastHeartbeatAt: { lt: disconnectedCutoff, gte: staleCutoff },
+          lastHeartbeatAt: { lt: heartbeatLateCutoff, gte: staleCutoff },
         },
       }),
-      // "준비 실패" — 아이 앱의 프리체크 결과를 받는 경로가 아직 없다(§9 오픈이슈,
+      // "준비 미확인" — 아이 앱의 프리체크 결과를 받는 경로가 아직 없다(§9 오픈이슈,
       // GET /sessions/:id/readiness 의 스텁과 같은 이유). 그래서 카메라/마이크/네트워크
       // 개별 실패가 아니라, teacher.ts 의 대기실 판정(LOBBY_OPEN)과 같은 창을 써서
-      // "시작 시각이 임박했거나 지났는데 아직 시작 못 한 세션" 수를 대신 센다.
+      // "시작 시각이 임박했거나 지났는데 아직 시작 못 한 세션" 수를 대신 센다. 확인이
+      // 실패한 게 아니라, 애초에 아무 확인도 돌지 않았다.
       prisma.session.count({
         where: { status: 'SCHEDULED', scheduledAt: { lte: lobbyCutoff } },
       }),
     ])
 
-    return { inProgress, disconnected, notReady, stale }
+    return { inProgress, heartbeatLate, readinessUnknown, stale }
   })
 
   /** 설계 §4.2 — 오늘(또는 지정한 날짜) 상태별 건수. 사후 확인용이라 실시간일 필요가 없다. */
@@ -110,7 +119,7 @@ export const operatorRoutes: FastifyPluginAsync<Deps> = async (app, { prisma }) 
   })
 
   /**
-   * 설계 §4.3 — 준비 실패 목록. /operator/live 의 notReady 와 같은 창(LOBBY_WINDOW_MS)을 쓴다.
+   * 설계 §4.3 — 준비 실패 목록. /operator/live 의 readinessUnknown 과 같은 창(LOBBY_WINDOW_MS)을 쓴다.
    * 실패 항목(카메라/마이크/네트워크)은 아직 정직하게 "확인 안 됨" 이다 —
    * GET /sessions/:id/readiness 스텁과 같은 이유(§9 오픈이슈). 확인 안 됐다는 사실을
    * 숨기지 않고 그대로 돌려준다. 연락처는 넣지 않는다 — 필요하면 §6.2의 열람 기록
