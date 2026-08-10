@@ -178,7 +178,9 @@ Modify `scheduling/src/routes/session.ts` — 기존 라우트들과 같은 방�
 
 | 메서드 | 경로 | 동작 |
 |---|---|---|
-| POST | `/sessions/:id/start` | 상태가 `SCHEDULED` 나 `LOBBY_OPEN` 일 때만. `IN_PROGRESS` 로 바꾸고 `startedAt`, `lastHeartbeatAt` 을 지금으로. 그 외 상태면 409 |
+| POST | `/sessions/:id/start` | 상태가 `SCHEDULED` 나 `LOBBY_OPEN` 일 때만. `IN_PROGRESS` 로 바꾸고 `startedAt`, `lastHeartbeatAt` 을 지금으로. 그 외 상태면 409. **조건부 `updateMany` 하나로 처리한다** — 읽고 쓰면 이중 클릭에 `startedAt` 이 덮인다 |
+
+⚠️ **`IN_PROGRESS` 를 새로 쓰기 시작하면 기존 종료 경로가 막힌다.** `/end` 와 `/cancel` 의 가드는 `IN_PROGRESS` 가 존재하지 않던 때 쓰여서 `SCHEDULED` 만 받는다. 그대로 두면 **선생님이 정상적으로 끝낸 수업이 409로 거부되고**, 결국 리퍼가 "생존신호 끊김" 으로 잘못 기록한다. `/end` 는 `IN_PROGRESS` 를, `/cancel` 은 `LOBBY_OPEN` 과 `IN_PROGRESS` 를 함께 받도록 **같은 태스크에서 넓힌다.**
 | POST | `/sessions/:id/heartbeat` | `IN_PROGRESS` 일 때만 `lastHeartbeatAt` 갱신. 그 외 상태면 409 |
 
 `heartbeat` 는 **초당 100회 들어온다.** 세션을 읽고 쓰는 왕복을 두 번 하지 말고, 상태 조건을 건 단일 `updateMany` 로 처리하고 영향 행 수로 결과를 판단한다.
@@ -254,9 +256,11 @@ Create `scheduling/src/jobs/reapStale.ts` 에 `pickStale` 순수 함수와, 그�
 
 `reapStale` 은 `IN_PROGRESS` 세션을 가져와 `pickStale` 로 거르고, 고른 것을 `ENDED` 로 바꾼다.
 
+⚠️ **쓰기는 반드시 읽은 조건을 다시 걸어야 한다.** `where: { id }` 만으로 쓰면, 스냅샷을 찍은 뒤 진짜 생존신호가 도착한 세션까지 끊는다 — 쓰는 순간 살아 있음이 증명된 수업을 죽이는 것이고, `/start` 가 `ENDED` 를 받지 않으므로 되돌릴 길이 없다. `updateMany` 에 `status: 'IN_PROGRESS'` 와 `lastHeartbeatAt: { lt: cutoff }` 를 함께 걸고 영향 행 수로 판단한다.
+
 **크레딧을 발급하지 않는다.** 이것은 결석이 아니라 선생님 브라우저가 죽은 것이고, 수업은 실제로 진행되었을 수 있다. 크레딧 판단은 사람이 한다 — 편성 설계 §5.1의 발생 사유 목록에 "생존신호 끊김" 이 없는 것은 의도다.
 
-정리된 세션에 그 사실이 남도록 `note` 에 표시를 덧붙이거나 별도 필드를 쓴다. 운영자가 나중에 "왜 끝났지" 를 알 수 있어야 한다.
+정리된 세션에 그 사실이 남도록 **`Session.endedReason` 필드를 따로 둔다.** `note` 에 넣으면 안 된다 — `PUT /sessions/:id/note` 가 상태 가드 없이 통째로 덮어써서, 선생님이 메모를 한 번 고치는 순간 자동 종료 사유가 사라진다.
 
 - [ ] **Step 3: 통과 확인 후 커밋**
 

@@ -192,3 +192,12 @@ start without the secret set. Not auth - it only stops accidental exposure.
 Task 3 finally implements the 90-second stale-session close the main design
 agreed to long ago and never had a path for. It deliberately issues no
 credit: a dead teacher browser is not a child's absence.
+operator Task 1-3: complete (01ad171..e360cce, reviewed together, 1 fix pass)
+  Liveness rule, start + heartbeat, stale reaper. Reviewing the three as one
+  caught what per-task review could not: /start writes IN_PROGRESS but /end
+  and /cancel predated it and only accepted SCHEDULED, so once the teacher
+  screen calls /start a normally finished lesson would be refused and later
+  mislabelled by the reaper as a lost heartbeat. Also fixed: the reaper wrote
+  from a stale snapshot and could close a session that had just beaten;
+  /start could reset startedAt under a double call; the auto-close reason
+  lived in the note field the teacher can overwrite.
