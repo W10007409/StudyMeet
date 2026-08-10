@@ -12,13 +12,19 @@ const ListQuery = z.object({
 })
 
 /**
+ * 설계 §4의 "시작 5분 전부터 대기실" 규칙. operator.ts 의 준비 실패 목록이 같은 창을
+ * 쓰므로 여기서 export 해 다시 적지 않게 한다.
+ */
+export const LOBBY_WINDOW_MS = 5 * 60 * 1000
+
+/**
  * 배치(materialize)는 세션을 SCHEDULED 로만 만든다. LOBBY_OPEN 으로 옮기는 배치가 없으므로
  * 여기서 조회 시점에 계산한다 — 설계 §4의 "시작 5분 전부터 대기실" 규칙.
  * ENDED/CANCELLED/NO_SHOW 처럼 확정된 상태는 그대로 돌려준다.
  */
 function displayStatus(status: SessionStatus, scheduledAt: Date, now: Date): SessionStatus {
   if (status !== 'SCHEDULED') return status
-  const lobbyOpensAt = scheduledAt.getTime() - 5 * 60 * 1000
+  const lobbyOpensAt = scheduledAt.getTime() - LOBBY_WINDOW_MS
   return now.getTime() >= lobbyOpensAt ? 'LOBBY_OPEN' : 'SCHEDULED'
 }
 
