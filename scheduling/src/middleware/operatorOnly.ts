@@ -45,7 +45,12 @@ export async function operatorOnly(request: FastifyRequest, reply: FastifyReply)
   const provided = request.headers[OPERATOR_SECRET_HEADER]
 
   if (!expected || provided !== expected) {
-    await reply.code(404).send({ error: 'Not Found' })
+    // 직접 { error: 'Not Found' } 를 만들어 보내지 않는다 — Fastify 기본 404 는
+    // message/error/statusCode 세 필드인데, 그것과 모양이 다른 응답은 "진짜 없는 경로"와
+    // "시크릿이 틀린 진짜 경로"를 바디만으로 구분하는 신호가 된다(설계 §2.1이 막으려는
+    // 바로 그것). reply.callNotFound() 는 server.ts 의 app 전역 setNotFoundHandler 로
+    // 위임해서, 두 경우가 항상 같은 코드 경로·같은 바디로 수렴하게 한다.
+    await reply.callNotFound()
     return
   }
 }

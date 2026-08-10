@@ -82,6 +82,11 @@ model Session {
   /// 같은 선생님이 같은 슬롯에 두 수업을 가질 수 없다.
   @@unique([teacherId, scheduledAt])
   @@index([enrollmentId, scheduledAt])
+  /// GET /operator/live 가 10초마다 폴링하는 count() 넷 중 셋이 status + lastHeartbeatAt
+  /// 또는 status + scheduledAt 으로 걸러낸다(operator.ts). status/lastHeartbeatAt/scheduledAt
+  /// 중 어느 것도 인덱스가 없어서 수십만 행 테이블에서 매 폴링마다 순차 스캔이 났다.
+  @@index([status, lastHeartbeatAt])
+  @@index([status, scheduledAt])
 }
 
 /// 크레딧 원장. 잔액은 Enrollment 에 캐시하지만 근거는 여기 남는다.

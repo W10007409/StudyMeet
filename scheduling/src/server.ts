@@ -36,6 +36,21 @@ app.register(contactRoutes, { prisma })
 app.register(makeupRoutes, { prisma })
 app.register(operatorRoutes, { prisma })
 
+// operatorOnly 는 시크릿이 틀리거나 없을 때 존재하지 않는 라우트와 구분되지 않는 404 를
+// 돌려줘야 한다(설계 §2.1) — 그래서 이 앱 전역 notFoundHandler가 "진짜 없는 경로"와
+// operatorOnly 가 reply.callNotFound() 로 위임하는 "시크릿 불일치"가 같은 코드 경로로
+// 수렴하는 유일한 지점이다. Fastify 기본 404 바디를 그대로 재현한다(message/error/statusCode
+// 세 필드) — operatorOnly 가 예전에 { error: 'Not Found' } 두 필드짜리를 직접 만들어
+// 보냈는데, 그건 Fastify 기본 404(세 필드)와 모양이 달라서 응답 바디만 비교해도 실제
+// 존재하는 operator 라우트를 골라낼 수 있었다.
+app.setNotFoundHandler((request, reply) => {
+  reply.code(404).send({
+    message: `Route ${request.method}:${request.url} not found`,
+    error: 'Not Found',
+    statusCode: 404,
+  })
+})
+
 app.addHook('onClose', async () => {
   await prisma.$disconnect()
 })
