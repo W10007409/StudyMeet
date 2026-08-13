@@ -6,7 +6,10 @@ import { sessionRoutes } from './routes/session.js'
 import { contactRoutes } from './routes/contact.js'
 import { makeupRoutes } from './routes/makeup.js'
 import { operatorRoutes } from './routes/operator.js'
+import { deviceRoutes } from './routes/device.js'
+import { studentRoutes } from './routes/student.js'
 import { requireOperatorSecret } from './middleware/operatorOnly.js'
+import { createFcmSender } from './push/fcm.js'
 
 // 운영자 API 는 전체 아동의 보호자 연락처와 모든 수업에 닿는데, 아직 진짜 인증이 없다
 // (설계 §2.1). OPERATOR_SECRET 없이는 그 장치가 조용히 통과하는 채로 뜨게 되므로,
@@ -20,6 +23,7 @@ try {
 
 const prisma = createPrisma()
 const app = Fastify({ logger: true })
+const pushSender = createFcmSender()
 
 // teacher-web(Vite) 은 다른 포트에서 뜨므로 브라우저가 CORS 로 막는다.
 // '*' 로 열지 않는다 — 배포 환경은 반드시 CORS_ORIGIN 을 실제 도메인으로 설정해야 한다.
@@ -31,10 +35,12 @@ await app.register(cors, {
 })
 
 app.register(teacherRoutes, { prisma })
-app.register(sessionRoutes, { prisma })
+app.register(sessionRoutes, { prisma, pushSender })
 app.register(contactRoutes, { prisma })
 app.register(makeupRoutes, { prisma })
 app.register(operatorRoutes, { prisma })
+app.register(deviceRoutes, { prisma })
+app.register(studentRoutes, { prisma })
 
 // operatorOnly 는 시크릿이 틀리거나 없을 때 존재하지 않는 라우트와 구분되지 않는 404 를
 // 돌려줘야 한다(설계 §2.1) — 그래서 이 앱 전역 notFoundHandler가 "진짜 없는 경로"와
