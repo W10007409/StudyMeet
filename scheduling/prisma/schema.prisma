@@ -17,6 +17,9 @@ model Student {
   id           String       @id @default(cuid())
   name         String
   guardianPhone String
+  /// 북클럽 앱의 childCustomerNumber. 아이 태블릿으로 푸시를 보내려면 이 값이 있어야 한다.
+  /// null 허용은 의도다 — 아직 매핑되지 않은 상태를 빈 문자열로 위장하지 않는다.
+  customerNumber String?     @unique
   enrollments  Enrollment[]
 }
 
@@ -104,4 +107,19 @@ model Holiday {
   /// 'YYYY-MM-DD' (KST 기준)
   date String @id
   name String
+}
+
+/// 아이 기기의 푸시 토큰. Student 와 외래키로 잇지 않고 customerNumber 문자열로 느슨하게
+/// 둔다 — 기기 등록 시점에 그 학생이 아직 이 DB 에 없을 수 있고, 그것을 이유로 등록을
+/// 거절하면 아이가 조용히 알림을 못 받게 된다.
+model Device {
+  id             String   @id @default(cuid())
+  token          String   @unique
+  customerNumber String
+  /// "android" | "ios"
+  platform       String
+  appVersion     String?
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([customerNumber])
 }

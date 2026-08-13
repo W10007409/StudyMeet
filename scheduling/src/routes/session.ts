@@ -2,9 +2,13 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify'
 import type { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
 import { creditDelta } from '../domain/credit.js'
+import { decideNudge, isNudgeable } from '../domain/nudge.js'
+import type { PushSender } from '../push/sender.js'
 
 interface Deps {
   prisma: PrismaClient
+  /** FCM 자격증명이 없으면 null. 그 사실을 응답으로 정직하게 드러낸다. */
+  pushSender: PushSender | null
 }
 
 const NoteBody = z.object({ note: z.string() })
@@ -19,7 +23,7 @@ async function sendNotFound(reply: FastifyReply): Promise<void> {
   await reply.code(404).send({ error: '세션을 찾을 수 없다' })
 }
 
-export const sessionRoutes: FastifyPluginAsync<Deps> = async (app, { prisma }) => {
+export const sessionRoutes: FastifyPluginAsync<Deps> = async (app, { prisma, pushSender }) => {
   app.get<{ Params: { id: string } }>('/sessions/:id/readiness', async (request, reply) => {
     const session = await prisma.session.findUnique({ where: { id: request.params.id } })
     if (!session) return sendNotFound(reply)
@@ -35,13 +39,57 @@ export const sessionRoutes: FastifyPluginAsync<Deps> = async (app, { prisma }) =
   })
 
   app.post<{ Params: { id: string } }>('/sessions/:id/nudge', async (request, reply) => {
-    const session = await prisma.session.findUnique({ where: { id: request.params.id } })
+    const session = await prisma.session.findUnique({
+      where: { id: request.params.id },
+      include: {
+        enrollment: { include: { student: true } },
+        teacher: true,
+      },
+    })
     if (!session) return sendNotFound(reply)
 
-    // FCM 연동은 이 계획 범위 밖이다. 도달 실패를 성공으로 바꾸지 않는다 —
-    // 선생님 화면이 이 값을 보고 "알림이 전달되지 않았어요"를 띄운다.
-    request.log.warn({ sessionId: session.id }, 'nudge: FCM not configured, notification not sent')
-    return { delivered: false, reason: 'FCM_NOT_CONFIGURED' }
+    // 끝난 수업에 아이를 부르는 알림이 가서는 안 된다.
+    if (!isNudgeable(session.status)) {
+      return reply.code(409).send({ error: '부를 수 있는 상태의 세션이 아니다' })
+    }
+
+    const customerNumber = session.enrollment.student.customerNumber
+    const devices = customerNumber
+      ? await prisma.device.findMany({ where: { customerNumber } })
+      : []
+
+    let sent = 0
+    let failed = 0
+
+    if (pushSender !== null && devices.length > 0) {
+      const result = await pushSender.send(devices.map((d) => d.token), {
+        type: 'lesson_call',
+        sessionId: session.id,
+        teacherName: session.teacher.name,
+        scheduledAt: session.scheduledAt.toISOString(),
+      })
+      sent = result.okTokens.length
+      failed = result.invalidTokens.length + result.failedTokens.length
+
+      // 죽은 토큰을 남겨 두면 아이가 앱을 지운 뒤에도 영영 "보냈다"가 나온다.
+      if (result.invalidTokens.length > 0) {
+        await prisma.device.deleteMany({ where: { token: { in: result.invalidTokens } } })
+      }
+    }
+
+    const outcome = decideNudge({
+      configured: pushSender !== null,
+      customerNumber,
+      deviceCount: devices.length,
+      sent,
+      failed,
+    })
+
+    request.log.info(
+      { sessionId: session.id, customerNumber, deviceCount: devices.length, ...outcome },
+      'nudge result',
+    )
+    return outcome
   })
 
   app.post<{ Params: { id: string } }>('/sessions/:id/start', async (request, reply) => {
