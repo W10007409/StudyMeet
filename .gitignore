@@ -11,6 +11,14 @@
 /build
 **/build
 signaling/node_modules/
+signaling/deploy/.env
+signaling/deploy/certs/
+# 북클럽 앱은 별도 프로젝트다. 이 저장소에서 버전 관리하지 않는다.
+app-bookclub3-master/
+app-bookclub3-master.zip
+# Firebase 서비스 계정 키. 이 파일 하나로 프로젝트의 모든 푸시를 보낼 수 있다.
+*firebase-adminsdk*.json
+google-services.json
 /captures
 .externalNativeBuild
 .cxx

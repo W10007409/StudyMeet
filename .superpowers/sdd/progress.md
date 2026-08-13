@@ -213,3 +213,239 @@ operator Task 4-6: complete (1115c7b..24d15b2, reviewed together, 2 fix passes)
 === operator monitoring PLAN COMPLETE: Tasks 1-6 ===
 scheduling 31 tests, teacher-web 35, all builds clean.
 NOT DEPLOYABLE until auth exists - see design 2.1.
+
+=== NEW PLAN: lesson call push (uncommitted mode) ===
+Plan: docs/superpowers/plans/2026-08-11-lesson-call-push-implementation.md
+Spec: docs/superpowers/specs/2026-08-11-lesson-call-push-design.md
+13 tasks across scheduling / teacher-web / app-bookclub3-master.
+DECIDED: no commits at all this run - work stays in the working tree.
+DECIDED: app-bookclub3-master is not tracked (added to .gitignore); it is a
+  separate project with no .git of its own.
+Per-task diffs come from directory snapshots under C:\tmp\smsnap, not git
+  ranges. Snapshot root is short on purpose: Kotlin package paths under the
+  scratchpad exceeded Windows' 260-char limit and git could not read them.
+lesson Task 1: complete (no commit; diff C:\tmp\task-01-diff.txt, review clean)
+  decideNudge + isNudgeable. 11 tests, full suite 42/42.
+  Minor deferred to final review:
+    - nudge.test.ts test named "빈 문자열 회원번호" passes '   ' (whitespace),
+      never a true ''. Behaviour is correct (trim() covers both); the name
+      overstates coverage. Originates in the plan's Task 1 code block.
+  Carried forward to Task 5: decideNudge trusts the caller for sent/failed;
+    the route must compute them from the real send result.
+lesson Task 2: complete (no commit; diff C:\tmp\task-02-diff.txt, review clean)
+  PushSender seam + classifyFcmError. 6 tests. No firebase-admin import yet.
+lesson Task 3: complete (no commit; diff C:\tmp\task-03-diff.txt, review clean)
+  Student.customerNumber + Device model + POST /devices. 5 tests, suite 53/53.
+  db:push SKIPPED - no Postgres on this machine. Must run before Task 13.
+lesson Task 4: complete (no commit; diff C:\tmp\task-04-diff.txt, review clean)
+  firebase-admin 13.10.0 + createFcmSender(). Returns null without a key so a
+  missing credential costs push, not the server. tsc clean.
+  NOT exercised at runtime yet - no Postgres, and no service account key.
+lesson Task 5: complete (no commit; diff C:\tmp\task-05-diff.txt, review clean)
+  nudge now looks up devices, sends, prunes invalid tokens, 409s on a finished
+  session. failed counts BOTH invalid and retryable; only invalid are deleted.
+  Suite 53/53, tsc clean. Endpoint NOT exercised - no Postgres.
+  Minor deferred to final review:
+    - pushSender.send() has no try/catch, so a whole-batch FCM exception 500s
+      instead of resolving to a typed NudgeOutcome, and skips the result log.
+SERVER SIDE COMPLETE (Tasks 1-5).
+lesson Task 6: complete (no commit; diff C:\tmp\task-06-diff.txt, review clean)
+  nudgeMessage() maps reason -> the action it implies. Call button moved out of
+  the readiness warning box so it survives the readiness stub being replaced.
+  7 tests, teacher-web suite 42/42.
+lesson Task 7: complete (no commit; diff C:\tmp\task-07-diff.txt, review clean)
+  google-services plugin applied CONDITIONALLY on composeApp/google-services.json
+  so a missing credential costs push, not the build. firebase-bom 34.1.0 resolved.
+  Firebase confined to androidMain. POST_NOTIFICATIONS + USE_FULL_SCREEN_INTENT.
+  assembleBookpadDebug SUCCESSFUL with the no-FCM fallback line in the log.
+  NOTE: first bookclub build took ~2h (cold dependency cache). Later ones warm.
+lesson Task 8: complete (no commit; diff C:\tmp\task-08-diff.txt, review clean after 2 fix passes)
+  childCustomerNumber now persisted and restored when the launcher supplies
+  nothing - a push-woken app used to run as the dummy customer.
+  Fix 1: the plan block silently dropped an existing AppLogger call.
+  Fix 2: a BLANK launcher value took the authoritative branch, so an empty
+    customer number reached UserSession and every API call. Now falls through.
+  MapSettings came from multiplatform-settings-test, not the core artifact the
+    plan named; confined to commonTest. 6/6 shared tests.
+PACE CHANGE: bookclub Gradle dominates (Task 7 alone = 119 min, cold cache).
+  Remaining bookclub tasks are batched (9+10, then 11+12), verified with
+  compileDebugKotlinAndroid instead of assembleBookpadDebug where an APK is not
+  needed, and reviewers are told not to explore the tree.
+lesson Task 9+10: complete (no commit; diff C:\tmp\task-0910-diff.txt, review clean)
+  Reviewed together. Scheduling backend gets its own named("studymeet") Ktorfit
+  so the gateway envelope and the 204-no-body backend never mix. lessonModule
+  registered in BOTH MainApplication and KoinHelper. Screen.Lesson destination,
+  MVI component, placeholder screen, openLesson() dedup on active config.
+  Deviation: dimensions.spacing16 does not exist; used dimensions.space.space16.
+  Builds 45s / 35s with compileBookpadDebugKotlinAndroid - cache now warm.
+lesson Task 11+12: complete (no commit; diff C:\tmp\task-1112-diff.txt, review clean after 1 fix pass)
+  Reviewed together. Call notification (full-screen + heads-up fallback, logs
+  which the system allowed), LessonCallActivity (exported=false), OPEN_LESSON
+  route, FCM service, DeviceTokenRegistrar, POST_NOTIFICATIONS request.
+  DEVICE VERIFIED on R8YW70BEYLZ: call screen renders, 들어가기 -> Splash -> Main
+  -> Lesson with the session id threaded through. Token fetch fails cleanly
+  without google-services.json and does not crash.
+  Fixes: messaging service scope was never cancelled; onNewIntent pushed the
+  lesson without the Splash deferral, so a warm-start call could be swallowed
+  by replaceCurrent(Main).
+  Recorded as deliberate: one notification id (a newer call supersedes an older
+  one, like a second phone call); onNewToken does not retry before bootstrap.
+  PLAN DEFECT: Task 11 Step 7 adb command cannot start a non-exported activity
+  on a retail device. The plan should say so.
+lesson Task 14 (NEW, user request mid-run): complete (no commit; diff C:\tmp\task-14-diff.txt, review clean after 2 minor fixes)
+  KRS library screen now has a [수업 들어가기] button next to the vocabulary
+  challenge button. Green pill so the two do not read as one block.
+  Video-camera glyph hand-authored as an ImageVector - this app has no Material
+  icon dependency and release does not shrink, so a library would ship whole for
+  one glyph.
+  Click travels the SAME route the vocabulary button already uses (individual
+  callback through KrsCurriculumPane, unwrapped to KrsIntent in KrsTabContent).
+  DEVICE VERIFIED: button -> lesson screen (manual-entry) -> back returns.
+  Fixes applied inline: redundant by lazy on an object property; import order.
+  OPEN GAP: a manual entry has no real session id. LessonEntry.MANUAL_SESSION_ID
+    stands in until the child app can ask the backend which session is its own.
+
+=== STOPPED: Task 13 (end to end) BLOCKED ===
+Needs all three, none of which exist yet:
+  - Postgres running + prisma db:push (schema never pushed)
+  - google-services.json for com.wjthinkbig.bookclub3app.bookpad
+  - Firebase service account key for the scheduling server
+Everything else in the plan is code-complete and verified as far as it can be.
+
+=== NEW PLAN: lesson audio call (uncommitted mode) ===
+Plan: docs/superpowers/plans/2026-08-12-lesson-audio-call-implementation.md
+Spec: docs/superpowers/specs/2026-08-12-lesson-audio-call-design.md
+11 tasks. Audio only - no camera, renderer, PiP, foreground service, reconnect.
+Teacher is caller, child is callee. New :studymeet Android library module.
+Snapshots prefixed a01.. under C:\tmp\smsnap; diffs at C:\tmp\aNN-diff.txt.
+audio Task 1: complete (no commit; diff C:\tmp\a01-diff.txt, review clean)
+  pickCurrentSession + CURRENT_SESSION_WINDOW_MS. 10 tests.
+  Minors deferred to final review (both originate in the plan, not the implementer):
+    - LOBBY_OPEN is in JOINABLE_STATUSES but no test exercises it; a typo in
+      that allowlist member would not be caught.
+    - status is bare string, so an unrecognised status is silently excluded
+      rather than caught at compile time.
+audio Task 2: complete (no commit; diff C:\tmp\a02-diff.txt, review clean after 1 fix pass)
+  GET /students/:customerNumber/current-session. Ownership enforced by the
+  where clause; all three failure paths return an identical 404 so "exists but
+  not yours" cannot be told from "does not exist". Suite 63/63, live curl OK.
+  Fix: scheduledAt went out as UTC while every other route uses toKstIsoString.
+    That exact shape caused a nine-hour display error in this repo once before.
+  Controller fix before review: .env had SIGNALING_URL=ws://localhost:8081,
+    which Android blocks as cleartext - only the literal 127.0.0.1 is permitted.
+  Minor deferred to final review:
+    - include teacher runs for every candidate session, not just the picked one.
+audio Task 3: complete (no commit; diff C:\tmp\a03-diff.txt, review clean)
+  LessonCallEngine + LessonCallState + CallFailure in :shared/commonMain, no
+  platform types. NoopLessonCallEngine fails loudly rather than pretending.
+  Bound on BOTH platforms; Android binding is replaced in Task 7.
+  ENV LIMIT: iOS targets cannot compile on this Windows host (CommonCrypto
+  cinterop). The iOS edit is verified by inspection only, every task from here on.
+audio Task 4: complete (no commit; diff C:\tmp\a04-diff.txt, review clean after 1 fix pass)
+  :studymeet android library added. implementation(projects.shared) one way only;
+  webrtc + okhttp confined to it; composeApp consumes it from androidMain so it
+  stays off the iOS build. Manifest: INTERNET, RECORD_AUDIO, MODIFY_AUDIO_SETTINGS.
+  Controller fixes: snapshot script did not capture studymeet/ or settings.gradle
+    .kts, so the first diff could not show the load-bearing files - script fixed.
+    Catalog said okhttp 4.12.0 while Gradle resolved 5.2.1 via Ktor; declared
+    version now matches what is actually on the classpath.
+audio Task 5: complete (no commit; diffs C:\tmp\a05-diff.txt + a05-fix-diff.txt, review clean after 1 fix pass)
+  SignalingMessage codec + IceCandidateBuffer<T>. 20 tests.
+  Fix: the clear() test drained the buffer before clearing, so it proved nothing;
+    Ready/PeerLeft were never round-tripped through the encoder; and the
+    never-throw contract had no malformed-candidate coverage. All three closed.
+audio Task 6: complete (no commit; diffs C:\tmp\a06-diff.txt + a06-fix-diff.txt, review clean after 1 fix pass)
+  SignalingClient (OkHttp WebSocket) + WebRtcAudioSession (audio-only PeerConnection).
+  Fixes: audioSource was a local and leaked on every teardown; localAudioTrack was
+    nulled without dispose; SDP failures only logged and never reached onFailed, so
+    a failed setRemoteDescription left the call stuck at connecting with no signal;
+    createAnswer fired before setRemoteDescription had applied; candidate dropped
+    with no log when peerConnection was null; OkHttp dispatcher never shut down.
+  close() order verified safe: peerConnection, track, source, factory, eglBase.
+  Minor deferred to final review:
+    - eglBase.release() is unguarded against a double close().
+audio Task 7: complete (no commit; diffs C:\tmp\a07-diff.txt + a07-fix-diff.txt + a07-fix2-diff.txt, review clean after 2 fix passes)
+  AndroidLessonCallEngine assembled; Android Koin binding switched off the Noop.
+  Fix 1: every retry stranded a PeerConnectionFactory, EglBase and OkHttp
+    dispatcher - join() and both failure callbacks replaced objects without
+    closing them, and the retry button makes that the common path. Also: the
+    room query injected a slash into the URL path; audio routing was forced to
+    speaker and never restored; three fields were unsynchronised.
+  Fix 2: fix 1 held the lock across close(), called from listener threads - a
+    circular wait. Lock now covers only the reference swap. Permission branch
+    also tears down now.
+  Minor deferred to final review:
+    - a stale failure callback from an old session can tear down a session that
+      a retry has already replaced. A generation counter would close it.
+audio Task 8: complete (no commit; diffs C:\tmp\a08-diff.txt + a08-fix-diff.txt, review clean after 2 fix passes)
+  JoinInfo + GetJoinInfoUseCase + LessonApi.getCurrentSession. Screen.Lesson
+  sessionId now nullable; LessonEntry.MANUAL_SESSION_ID deleted.
+  Fix 1: 404 and network failure were one untyped Throwable, so a dropped wifi
+    would have told the child "there is no lesson". Added NoCurrentSessionException.
+  Fix 2: that mapping could never fire - the shared HttpClient has expectSuccess
+    off, so a 404 was being deserialized as a success body. Added
+    createForStudymeet() with validation on; only the studymeet Ktorfit uses it.
+    create() was factored but verified byte-identical in behaviour for every
+    existing gateway API.
+audio Task 9: complete (no commit; diffs C:\tmp\a09-diff.txt + a09-fix2-diff.txt, review clean after 2 fix passes)
+  LessonComponent fetches join info and drives the engine; LessonScreen shows
+  each failure in words a child can act on.
+  DEVICE CRASH FOUND AND FIXED: libwebrtc calls onIceConnectionChange on its own
+    signalling thread, and the leak fix from Task 7 disposed the PeerConnection
+    inside that callback - SIGABRT on a destroyed mutex, 2/2 reproducible.
+    Failure teardown now posts to the main thread. Verified: crash buffer empty,
+    pid survives, screen shows the failure.
+  Fix 2: the posted teardown had no call identity, so a retry could have its new
+    session torn down by a stale post. Generation counter added.
+    Also: a dropped network read as "문제가 생겼어요", same as an internal error.
+    New LessonPhase.LookupFailed - the design requires those to differ.
+  Minor deferred to final review:
+    - generation is captured by reading the live value at post time, leaving a
+      few-instruction TOCTOU window. Pinning it to the session instance closes it.
+    - no automated test covers the generation guard or the LookupFailed path.
+audio Task 10: complete (no commit; diffs C:\tmp\a10-diff.txt + a10-fix-diff.txt, review clean after 1 fix pass)
+  MainActivity.requestMicPermission() shared by onCreate and onResume.
+  Controller verified the re-ask path by revoking the permission: the grant
+  dialog did reappear.
+  Fix: onResume re-asked unconditionally, so declining reopened the same dialog
+    immediately and the child never reached the retry button. Now gated by a
+    per-visit flag cleared in onStop.
+audio Task 11: complete (verification only)
+  FIRST AUDIO CONNECTION: iceConnectionState CHECKING -> CONNECTED on the tablet,
+  and coturn logged an allocation within 5s of it, then released it at hang-up.
+  Route: tablet -> USB adb reverse -> coturn on the PC -> teacher browser.
+  NOT verified: byte-level media flow (getStats bytesSent/bytesReceived). The
+    browser scripting tool was blocked mid-run. Nobody heard audio - no such
+    claim is made.
+  Also found: ending the session from teacher-web correctly blocked a rejoin;
+    resetting status by raw SQL did NOT restore a working call - the signalling
+    room state is not cleared by a DB flip. Worth knowing before anyone tests
+    that way again.
+  Design doc §7 updated with confirmed/unconfirmed.
+  §7-2 (calling across two real networks) remains UNANSWERED - USB bridged it.
+
+=== audio plan: all 11 tasks done, FINAL REVIEW FOUND SERIOUS ISSUES ===
+Whole-plan diff: C:\tmp\audio-branch-diff.txt (2414 lines)
+Final review (opus) found what per-task review could not see:
+  MUST FIX:
+   1. currentSession has no LOWER time bound and student.ts has no date scope,
+      while reapStale only reaps IN_PROGRESS. A lesson the teacher never starts
+      stays SCHEDULED in the past forever, sorts first, and routes the child
+      into a dead room on every future tap. A test locks this in as intended.
+   2. MainActivity.requestMicPermission() is public for the lesson screen but
+      nothing calls it. A child who denies is trapped: retry re-CHECKS the
+      permission, never re-ASKS. Spec 5 requires the re-request.
+   3. join() increments the generation BEFORE closing the old socket, and that
+      close likely fires onFailure - so the old failure is tagged with the NEW
+      generation and tears down the session the retry just built.
+   4. onConnected() has no generation guard and no main-thread hop, unlike
+      onFailed(). A dying session can publish Connected after Idle/Failed.
+   5. WebRtcAudioSession.peerConnection is neither volatile nor guarded;
+      handleRemote* run on the OkHttp thread while close() runs on main.
+   6. IceCandidateBuffer is touched from three threads and is a bare list.
+  SHOULD FIX: ENGINE_ERROR unreachable (SDP faults report as ICE_FAILED);
+   bare String status; signaling/README.md still says tablet is caller;
+   expectSuccess now also affects registerDevice; two lesson screens can stack
+   over one singleton engine.
+UNPROVEN AND MOST IMPORTANT: no evidence any audio byte ever crossed. ICE
+  CONNECTED + a coturn allocation prove a transport, not a media path.
