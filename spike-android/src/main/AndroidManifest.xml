@@ -2,6 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!--
+      libwebrtc의 NetworkMonitor가 PeerConnection 생성 시 ConnectivityManager를 읽는다.
+      이 권한이 없으면 SecurityException이 JNI 경계에서 CHECK에 걸려 프로세스가 abort된다.
+      런타임 요청이 필요 없는 normal 권한이다.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  디버그 빌드에서만 평문(ws://, http://) 통신을 허용한다.
+  Phase 0 시그널링 서버는 TLS가 없어서, targetSdk 28 이상의 기본 정책으로는
+  ws:// 연결이 그대로 차단된다. 계측용 빌드에만 걸고 main 매니페스트는 건드리지 않는다.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application android:usesCleartextTraffic="true" />
+
+</manifest>
