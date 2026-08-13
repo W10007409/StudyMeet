@@ -1,32 +1,29 @@
 # coturn (TURN 서버) 스파이크 설정
 
 > **이 문서는 스파이크 전용이다. 프로덕션 배포 가이드가 아니다.**
-> 여기 적힌 설정(`--no-tls --no-dtls`, 평문 3478 포트)은 릴레이 비율을 측정하기 위한
-> 로컬/임시 서버용이다. 운영 배포에는 그대로 쓸 수 없다.
+> 목적은 릴레이 비율 측정 하나다.
 
-## Docker로 띄우기
+## 어디에 띄우는가
 
-    docker run -d --network=host \
-      -e TURN_USER=spike -e TURN_PASS=<임의의 값> \
-      coturn/coturn \
-      -n --lt-cred-mech --fingerprint \
-      --user=spike:<임의의 값> \
-      --realm=studymeet.local \
-      --listening-port=3478 \
-      --no-tls --no-dtls
+**개발 PC에는 띄울 수 없다.** 태블릿(가정 와이파이)에서 사내망 PC로 가는 경로가 없기
+때문이다. TURN은 서로 못 닿는 두 망을 잇는 마법이 아니라, *양쪽 모두가 도달할 수 있는
+호스트*가 있어야 동작한다. 그래서 공인 IP를 가진 VM에 시그널링과 함께 올린다.
 
-**운영에서는 TLS 443이 필수다 (설계 §3.1).** 스파이크에서는 평문 3478로 충분하다.
-이 차이를 없애고 그대로 배포하면 안 된다 — 이 문서는 그 절차를 다루지 않는다.
+구성·발급·기동 절차는 [`deploy/README.md`](deploy/README.md) 에 있다. 리스닝은
+**443 TCP + TLS 하나뿐**이다 (설계 §3.1). 사내망이 443 외의 포트와 UDP를 막는 것이
+검증 대상이므로 평문 3478은 열지 않는다.
 
 ## 자격증명은 커밋하지 않는다
 
-`local.properties` 에만 둔다. 이 파일은 `.gitignore` 에 포함되어 있다.
+서버 쪽은 `signaling/deploy/.env`, 앱 쪽은 `local.properties` 에만 둔다. 둘 다
+`.gitignore` 에 포함되어 있다.
 
-    turn.url=turn:<서버 IP>:3478
-    turn.user=spike
+    turn.url=turns:turn.<도메인>:443?transport=tcp
+    turn.user=studymeet
     turn.pass=<임의의 값>
 
 `turn.url` 이 비어 있으면 앱은 STUN만으로 빌드/동작한다 (TURN은 빌드 타임에 선택적이다).
+그 상태에서는 서로 다른 망에 있는 두 기기가 붙지 않는 것이 정상이다 — 코드 결함이 아니다.
 
 ## 릴레이 여부 판별
 

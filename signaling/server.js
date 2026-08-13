@@ -9,6 +9,9 @@ const fs = require('fs');
 const path = require('path');
 
 const PORT = process.env.PORT || 8080;
+// 공개 VM에서는 nginx가 TLS를 벗겨 루프백으로 넘겨주므로 127.0.0.1에만 바인딩한다.
+// 기본값은 로컬 개발용이라 모든 인터페이스를 연다.
+const HOST = process.env.HOST || '0.0.0.0';
 const rooms = new Map(); // roomId -> Set<WebSocket>
 
 const server = http.createServer((req, res) => {
@@ -34,7 +37,7 @@ const server = http.createServer((req, res) => {
 });
 
 const wss = new WebSocketServer({ server });
-server.listen(PORT);
+server.listen(PORT, HOST);
 
 wss.on('connection', (ws, req) => {
   const { query } = parse(req.url, true);
@@ -86,5 +89,5 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-console.log(`signaling + static server listening on http://0.0.0.0:${PORT}`);
-console.log(`teacher page: http://0.0.0.0:${PORT}/teacher.html?room=phase0&role=callee`);
+console.log(`signaling + static server listening on http://${HOST}:${PORT}`);
+console.log(`teacher page: http://${HOST}:${PORT}/teacher.html?room=phase0&role=callee`);
