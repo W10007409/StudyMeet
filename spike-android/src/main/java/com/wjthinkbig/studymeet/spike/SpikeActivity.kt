@@ -67,12 +67,31 @@ class SpikeActivity : AppCompatActivity() {
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
-            if (granted.values.all { it }) {
+            // 카메라와 마이크만 필수. 알림 권한은 선택사항.
+            val cameraGranted = granted[Manifest.permission.CAMERA] == true
+            val audioGranted = granted[Manifest.permission.RECORD_AUDIO] == true
+
+            if (cameraGranted && audioGranted) {
                 startCamera()
             } else {
-                statusText.text = "권한 거부됨"
+                statusText.text = "카메라/마이크 권한 필요"
+                // 2초 후 자동으로 다시 요청
+                lifecycleScope.launch {
+                    kotlinx.coroutines.delay(2000)
+                    requestPermissions()
+                }
             }
         }
+
+    private fun requestPermissions() {
+        permissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.CAMERA,
+                Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.POST_NOTIFICATIONS,
+            )
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,13 +105,7 @@ class SpikeActivity : AppCompatActivity() {
         remoteRenderer.init(eglBase.eglBaseContext, null)
         localRenderer.init(eglBase.eglBaseContext, null)
 
-        permissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.CAMERA,
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.POST_NOTIFICATIONS,
-            )
-        )
+        requestPermissions()
 
         registerReceiver(
             screenReceiver,
@@ -163,10 +176,8 @@ class SpikeActivity : AppCompatActivity() {
         newConfig: Configuration,
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        // PIP에서는 선생님 영상만 남긴다. 나머지는 숨긴다.
-        val hidden = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
-        localRenderer.visibility = hidden
-        statusText.visibility = hidden
+        // PIP 모드에서도 로컬 렌더러는 표시. statusText만 숨김.
+        statusText.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
     }
 
     override fun onDestroy() {
