@@ -89,13 +89,18 @@ export function useSession({ signalingUrl, room, role, onData, enabled }: Option
     }
 
     void (async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: CAPTURE, audio: true })
-      if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
-      localStreamRef.current = stream
-      if (localRef.current) localRef.current.srcObject = stream
-      stream.getTracks().forEach((t) => pc.addTrack(t, stream))
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: CAPTURE, audio: true })
+        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
+        localStreamRef.current = stream
+        if (localRef.current) localRef.current.srcObject = stream
+        stream.getTracks().forEach((t) => pc.addTrack(t, stream))
+      } catch (err) {
+        console.warn('카메라 접근 불가 (HTTPS 또는 localhost 필요):', err instanceof Error ? err.message : err)
+        // Continue without local stream for demo purposes
+      }
 
-      const ws = new WebSocket(`${signalingUrl}/?room=${encodeURIComponent(room)}`)
+      const ws = new WebSocket(`${signalingUrl}/ws?room=${encodeURIComponent(room)}`)
       wsRef.current = ws
 
       pc.onicecandidate = (e) => {

@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black">
+
+    <!-- 로컬 카메라 프리뷰 (항상 표시) -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/local_preview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <!-- 원격 비디오 (위치 예약) -->
+    <FrameLayout
+        android:id="@+id/remote_video_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <!-- 방 입장 전 UI -->
+    <LinearLayout
+        android:id="@+id/entry_ui"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="@android:color/black"
+        android:padding="16dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="StudyMeet 아이 앱"
+            android:textColor="@android:color/white"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:layout_marginBottom="32dp" />
+
+        <!-- 방 코드 입력 영역 -->
+        <LinearLayout
+            android:id="@+id/room_input_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#80333333"
+            android:orientation="vertical"
+            android:padding="24dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="방 코드 입력"
+                android:textColor="@android:color/white"
+                android:textSize="18sp"
+                android:layout_marginBottom="16dp" />
+
+            <EditText
+                android:id="@+id/room_code_input"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:background="@android:color/white"
+                android:hint="방 코드를 입력하세요"
+                android:padding="12dp"
+                android:textSize="16sp"
+                android:layout_marginBottom="16dp" />
+
+            <Button
+                android:id="@+id/join_room_button"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="입장"
+                android:textSize="16sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 비디오 통화 중 제어 UI -->
+    <LinearLayout
+        android:id="@+id/call_controls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:orientation="horizontal"
+        android:background="#CC000000"
+        android:padding="16dp"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/end_call_button"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="통화 종료"
+            android:textSize="14sp"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/toggle_camera_button"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="카메라 OFF"
+            android:textSize="14sp"
+            android:layout_marginStart="8dp" />
+
+        <Button
+            android:id="@+id/toggle_screen_button"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="화면 공유 중지"
+            android:textSize="14sp"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+</FrameLayout>

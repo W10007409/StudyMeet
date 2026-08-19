@@ -1,175 +1,270 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { TeacherApi } from '../api/client'
-import type { DataMessage, PageState, PresenceState, SessionSummary } from '../domain/types'
-import { applyPageSync, nextLocalPage } from '../domain/pageSync'
-import { accumulateDisconnected } from '../domain/presence'
-import { debounce, type Debounced } from '../domain/autosave'
+import type { DataMessage, SessionSummary } from '../domain/types'
 import { useSession } from '../webrtc/useSession'
-import { TopBar } from '../components/TopBar'
-import { BookViewer } from '../components/BookViewer'
+import { useTouchInput } from '../webrtc/useTouchInput'
 
-const TOTAL_PAGES = 48
-/** scheduling/src/domain/liveness.ts 의 HEARTBEAT_INTERVAL_MS 와 같은 값. 백엔드 패키지가
- * 달라 임포트할 수 없으므로 프론트에 상수로 둔다 — 값을 바꾸려면 양쪽을 같이 고친다. */
-const HEARTBEAT_INTERVAL_MS = 30_000
+const ACTION_LABEL: Record<string, string> = {
+  down: '누름',
+  move: '이동',
+  up: '뗌',
+  cancel: '취소',
+  click: '탭',
+  double_click: '더블탭',
+}
 
-export function Lesson({ api, session, onEnded }: {
-  api: TeacherApi
+export function Lesson({ session, onEnded }: {
   session: SessionSummary
   onEnded: () => void
 }) {
-  const [page, setPage] = useState<PageState>({ pageNo: 1, counter: 0, by: 'teacher' })
-  const [lastBy, setLastBy] = useState<'teacher' | 'student' | null>(null)
-  const [presence, setPresence] = useState<PresenceState>('IN_CLASS')
-  const [presenceSince, setPresenceSince] = useState(Date.now())
-  const [elapsedMs, setElapsedMs] = useState(0)
-  const [presenceMs, setPresenceMs] = useState(0)
-  const [disconnectedMs, setDisconnectedMs] = useState(0)
-  const [note, setNote] = useState('')
-
-  const startedAt = useRef(Date.now())
-  const noteRef = useRef('')
-  noteRef.current = note
-  const saveNoteRef = useRef<Debounced<[string]> | null>(null)
-  if (saveNoteRef.current === null) {
-    saveNoteRef.current = debounce((text: string) => { void api.saveNote(session.sessionId, text) }, 3000)
-  }
-  const saveNote = saveNoteRef.current
-  const pageRef = useRef<PageState>({ pageNo: 1, counter: 0, by: 'teacher' })
-  pageRef.current = page
-  const presenceRef = useRef<PresenceState>('IN_CLASS')
-  presenceRef.current = presence
-  const presenceSinceRef = useRef(Date.now())
-  presenceSinceRef.current = presenceSince
+  const [padInput, setPadInput] = useState('')
+  const [messages, setMessages] = useState<{ from: 'teacher' | 'student'; text: string; time: string }[]>([])
+  const [touchEnabled, setTouchEnabled] = useState(true)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const remoteImageRef = useRef<HTMLImageElement>(null)
 
   const onData = useCallback((msg: DataMessage) => {
-    if (msg.type === 'page_sync') {
-      const incoming = { pageNo: msg.pageNo, counter: msg.counter, by: msg.by }
-      const next = applyPageSync(pageRef.current, incoming)
-      if (next !== pageRef.current) {
-        pageRef.current = next
-        setPage(next)
-        setLastBy(msg.by)
+    if (msg.type === 'pad_input') {
+      const time = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+      setMessages((prev) => [...prev, { from: msg.from, text: msg.text, time }])
+    } else if (msg.type === 'camera_frame') {
+      // Display camera frame from child device
+      if (remoteImageRef.current && typeof msg.data === 'string') {
+        remoteImageRef.current.src = `data:image/jpeg;base64,${msg.data}`
       }
-    } else if (msg.type === 'presence') {
-      setPresence(msg.state)
-      setPresenceSince(Date.now())
     }
   }, [])
 
-  // 접속 정보는 환경변수가 아니라 백엔드에서 받는다. 방 이름과 역할을 서버가 정해야
-  // 나중에 편성 시스템이 붙어도 화면이 안 바뀐다.
-  const [conn, setConn] = useState<{ signalingUrl: string; room: string; role: 'caller' | 'callee' } | null>(null)
-  useEffect(() => {
-    void api.getToken(session.sessionId).then(setConn)
-  }, [api, session.sessionId])
-
-  // startSession 은 접속 정보가 도착한 뒤 딱 한 번만 부른다 — 마운트 시점에 부르면
-  // 실제로 시작하지 않은 수업까지 진행 중으로 기록된다. 실패(이미 시작됨, 네트워크
-  // 순단)해도 화면은 계속 진행한다: 운영자 집계가 틀리는 것이 아이가 수업을 못 받는
-  // 것보다 훨씬 작은 손해다. 생존신호는 별도 타이머다 — 1초 틱과 주기도 목적도 다르고,
-  // 실패해도 화면에 띄우지 않는다(선생님이 할 수 있는 일이 없다). 인터벌 ID는 그려지는
-  // 값이 아니므로 state 가 아니라 ref 에 둔다 — 이 화면의 표준 규칙.
-  const startedRef = useRef(false)
-  const heartbeatIdRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  useEffect(() => {
-    if (conn === null || startedRef.current) return
-    startedRef.current = true
-
-    void api.startSession(session.sessionId).catch((err: unknown) => {
-      console.warn('startSession 실패 — 수업은 계속 진행한다', err)
-    })
-
-    heartbeatIdRef.current = setInterval(() => {
-      void api.heartbeat(session.sessionId).catch((err: unknown) => {
-        console.warn('heartbeat 실패 — 화면에는 띄우지 않는다', err)
-      })
-    }, HEARTBEAT_INTERVAL_MS)
-
-    return () => {
-      if (heartbeatIdRef.current !== null) {
-        clearInterval(heartbeatIdRef.current)
-        heartbeatIdRef.current = null
-      }
-    }
-  }, [api, session.sessionId, conn])
-
-  const { localRef, remoteRef, send } = useSession({
-    signalingUrl: conn?.signalingUrl ?? '',
-    room: conn?.room ?? '',
-    role: conn?.role ?? 'caller',
+  const { localRef, remoteRef, send, connected } = useSession({
+    signalingUrl: import.meta.env.VITE_SIGNALING_URL || 'ws://192.168.219.123:3000',
+    room: session.sessionId,
+    role: 'caller',
     onData,
-    enabled: conn !== null,
+    enabled: true,
   })
 
-  // 1초 틱 하나로 경과·이탈·누적 끊김을 모두 갱신한다.
-  // presence/presenceSince를 deps에 넣으면 접속이 바뀔 때마다 인터벌이
-  // 재생성되면서 대기 중이던 tick이 유실된다. 컴포넌트 생애 동안 하나만
-  // 돌리고, 최신 값은 ref로 읽는다.
-  useEffect(() => {
-    const id = setInterval(() => {
-      setElapsedMs(Date.now() - startedAt.current)
-      setPresenceMs(Date.now() - presenceSinceRef.current)
-      setDisconnectedMs((prev) => accumulateDisconnected(prev, presenceRef.current, 1000))
-    }, 1000)
-    return () => clearInterval(id)
-  }, [])
+  // 영상은 object-fit: cover 라 잘린 부분이 있다. 훅이 그만큼 되돌려 원본 프레임 기준으로 보낸다.
+  const { surfaceProps, indicatorRef, status } = useTouchInput({
+    send,
+    mediaRef: remoteImageRef,
+    objectFit: 'cover',
+    enabled: touchEnabled,
+  })
 
-  // 토스트는 1.5초만 띄운다.
-  useEffect(() => {
-    if (!lastBy) return
-    const id = setTimeout(() => setLastBy(null), 1500)
-    return () => clearTimeout(id)
-  }, [lastBy])
-
-  const changePage = (pageNo: number) => {
-    const next = nextLocalPage(pageRef.current, pageNo)
-    pageRef.current = next
-    setPage(next)
-    setLastBy('teacher')
-    send({ type: 'page_sync', pageNo: next.pageNo, counter: next.counter, by: 'teacher' })
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const changePageBy = (delta: number) => {
-    const target = Math.min(TOTAL_PAGES, Math.max(1, pageRef.current.pageNo + delta))
-    if (target === pageRef.current.pageNo) return
-    changePage(target)
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  const sendPadInput = () => {
+    if (!padInput.trim()) return
+
+    const time = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+    setMessages((prev) => [...prev, { from: 'teacher', text: padInput, time }])
+
+    send({ type: 'pad_input', text: padInput, from: 'teacher' })
+    setPadInput('')
   }
 
-  const end = async () => {
-    saveNote.flush()
-    await api.endSession(session.sessionId, noteRef.current, Math.round(disconnectedMs / 1000))
-    onEnded()
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendPadInput()
+    }
   }
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <TopBar
-        studentName={session.studentName}
-        elapsedMs={elapsedMs}
-        presence={presence}
-        presenceMs={presenceMs}
-        disconnectedMs={disconnectedMs}
-        onEnd={end}
-      />
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <BookViewer
-          pageNo={page.pageNo}
-          totalPages={TOTAL_PAGES}
-          lastBy={lastBy}
-          onPageDelta={changePageBy}
-          onPointer={(x, y, action) => send({ type: 'pointer', x, y, action })}
-        />
-        <div style={{ flex: '0 0 42%', display: 'flex', flexDirection: 'column' }}>
-          {/* 아이 영상을 크게. 표정을 읽는 것이 선생님의 일이다. 설계 §3.1 */}
-          <video ref={remoteRef} autoPlay playsInline style={{ flex: 2, background: '#000', minHeight: 0 }} />
-          <video ref={localRef} autoPlay playsInline muted style={{ flex: 1, background: '#000', minHeight: 0 }} />
-          <textarea
-            value={note}
-            onChange={(e) => { setNote(e.target.value); saveNote(e.target.value) }}
-            placeholder="메모"
-            style={{ height: 120, resize: 'none' }}
-          />
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#f5f5f5' }}>
+      {/* 상단 바 */}
+      <div style={{ padding: 16, background: '#fff', borderBottom: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ margin: 0 }}>{session.studentName}</h2>
+        <button
+          onClick={onEnded}
+          style={{
+            padding: '8px 16px',
+            background: '#ff6b6b',
+            color: 'white',
+            border: 'none',
+            borderRadius: 4,
+            cursor: 'pointer',
+            fontSize: 14,
+          }}
+        >
+          수업 종료
+        </button>
+      </div>
+
+      {/* 메인 콘텐츠 */}
+      <div style={{ flex: 1, display: 'flex', gap: 16, padding: 16, minHeight: 0 }}>
+        {/* 좌측: 영상 */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+          {/* 원격 비디오 (아이 카메라) + 터치 입력 영역 */}
+          <div style={{ flex: 1, background: '#000', borderRadius: 8, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+            <video ref={remoteRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'none' }} />
+            <img
+              ref={remoteImageRef}
+              draggable={false}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+              alt="Remote camera"
+            />
+
+            {/*
+              터치 수신면. 영상 위에 정확히 겹쳐 두어야 좌표 기준이 영상과 같아진다.
+              포인터 이벤트만 쓰고 touch-action: none 은 훅이 넣어 준다.
+            */}
+            <div
+              {...surfaceProps}
+              style={{ ...surfaceProps.style, position: 'absolute', inset: 0 }}
+            >
+              {/* 터치 가능 영역 표시 */}
+              {touchEnabled && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 6,
+                    border: `2px dashed ${status.pointerCount > 0 ? 'rgba(0,200,120,0.9)' : 'rgba(255,255,255,0.25)'}`,
+                    borderRadius: 6,
+                    pointerEvents: 'none',
+                    transition: 'border-color 120ms linear',
+                  }}
+                />
+              )}
+
+              {/* 손끝 표식. 위치는 훅이 DOM 에 직접 써서 재렌더 없이 따라간다. */}
+              <div
+                ref={indicatorRef}
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  width: 36,
+                  height: 36,
+                  marginLeft: 0,
+                  marginTop: 0,
+                  borderRadius: '50%',
+                  border: '2px solid #00e08a',
+                  background: 'rgba(0, 224, 138, 0.18)',
+                  boxShadow: '0 0 12px rgba(0, 224, 138, 0.6)',
+                  opacity: 0,
+                  transform: 'translate(-50%, -50%)',
+                  pointerEvents: 'none',
+                  willChange: 'left, top, transform, opacity',
+                }}
+              />
+            </div>
+
+            {/* 입력 상태 피드백 */}
+            <div
+              style={{
+                position: 'absolute', top: 8, left: 8, display: 'flex', gap: 6, alignItems: 'center',
+                fontSize: 12, color: '#fff', pointerEvents: 'none',
+              }}
+            >
+              <span style={{ background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: 4 }}>
+                {touchEnabled ? (connected ? '터치 전송 중' : '터치 대기 (연결 안 됨)') : '터치 꺼짐'}
+              </span>
+              {status.lastAction && (
+                <span style={{ background: 'rgba(0,102,204,0.85)', padding: '4px 8px', borderRadius: 4 }}>
+                  {ACTION_LABEL[status.lastAction] ?? status.lastAction}
+                </span>
+              )}
+              {status.gesture && (
+                <span style={{ background: 'rgba(0,150,90,0.85)', padding: '4px 8px', borderRadius: 4 }}>
+                  {status.gesture === 'pinch' ? `핀치 ×${status.scale.toFixed(2)}` : '드래그'}
+                </span>
+              )}
+              {status.pointerCount > 1 && (
+                <span style={{ background: 'rgba(120,0,160,0.85)', padding: '4px 8px', borderRadius: 4 }}>
+                  {status.pointerCount}점
+                </span>
+              )}
+            </div>
+
+            <button
+              onClick={() => setTouchEnabled((v) => !v)}
+              style={{
+                position: 'absolute', top: 8, right: 8, fontSize: 12, padding: '4px 8px',
+                borderRadius: 4, border: 'none', cursor: 'pointer',
+                background: touchEnabled ? '#00a06a' : '#555', color: '#fff',
+              }}
+            >
+              {touchEnabled ? '터치 켜짐' : '터치 꺼짐'}
+            </button>
+
+            <div style={{ position: 'absolute', bottom: 8, right: 8, fontSize: 12, color: '#fff', background: '#000', padding: '4px 8px', borderRadius: 4, pointerEvents: 'none' }}>
+              🎥 아이 카메라 · 전송 {status.sentCount}
+            </div>
+          </div>
+          {/* 로컬 비디오 (선생님 카메라) */}
+          <div style={{ flex: '0 0 120px', background: '#000', borderRadius: 8, overflow: 'hidden' }}>
+            <video ref={localRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
+        </div>
+
+        {/* 우측: 패드 메시지 */}
+        <div style={{ flex: '0 0 300px', display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: 8, border: '1px solid #ddd', minHeight: 0 }}>
+          <div style={{ padding: 12, borderBottom: '1px solid #ddd', fontWeight: 'bold' }}>패드</div>
+
+          {/* 메시지 영역 */}
+          <div style={{ flex: 1, overflow: 'auto', padding: 12, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            {messages.length === 0 ? (
+              <div style={{ color: '#999', fontSize: 14, textAlign: 'center', marginTop: 20 }}>메시지가 없습니다</div>
+            ) : (
+              messages.map((msg, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    marginBottom: 12,
+                    padding: 8,
+                    background: msg.from === 'teacher' ? '#e3f2fd' : '#f5f5f5',
+                    borderRadius: 6,
+                    alignSelf: msg.from === 'teacher' ? 'flex-end' : 'flex-start',
+                    maxWidth: '90%',
+                  }}
+                >
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                    {msg.from === 'teacher' ? '선생님' : '학생'} {msg.time}
+                  </div>
+                  <div style={{ fontSize: 14, wordWrap: 'break-word' }}>{msg.text}</div>
+                </div>
+              ))
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* 입력 영역 */}
+          <div style={{ padding: 12, borderTop: '1px solid #ddd', display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              value={padInput}
+              onChange={(e) => setPadInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="입력..."
+              style={{
+                flex: 1,
+                padding: 8,
+                border: '1px solid #ddd',
+                borderRadius: 4,
+                fontSize: 14,
+              }}
+            />
+            <button
+              onClick={sendPadInput}
+              style={{
+                padding: '8px 12px',
+                background: '#0066cc',
+                color: 'white',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontSize: 12,
+              }}
+            >
+              전송
+            </button>
+          </div>
         </div>
       </div>
     </div>

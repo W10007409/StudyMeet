@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">StudyMeet 아이</string>
+    <string name="camera_button">카메라</string>
+    <string name="mic_button">음성</string>
+    <string name="pip_button">PiP</string>
+    <string name="exit_button">나가기</string>
+</resources>

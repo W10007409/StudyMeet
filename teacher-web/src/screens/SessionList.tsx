@@ -1,83 +1,243 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { TeacherApi } from '../api/client'
+import { useState } from 'react'
 import type { SessionSummary } from '../domain/types'
-import { canRequestCancel, isLateCancel, kstDatePlus, kstToday } from '../domain/scheduling'
 
-/** 설계 §4.3 — 종료해도 예정 시각 +30분 안이면 다시 들어갈 수 있다. */
-function canEnter(s: SessionSummary): boolean {
-  if (s.status === 'LOBBY_OPEN' || s.status === 'IN_PROGRESS') return true
-  if (s.status !== 'ENDED') return false
-  const limit = new Date(s.scheduledAt).getTime() + 30 * 60 * 1000
-  return Date.now() < limit
-}
+// 테스트용 고정값
+const TEST_CUSTOMER_NUMBER = 'TEST-CHILD-001'
+const TEST_ROOM_CODE = 'room-test-001'
 
-export function SessionList({ api, onEnter, onStudents }: {
-  api: TeacherApi
+export function SessionList({ onEnter }: {
   onEnter: (s: SessionSummary) => void
-  onStudents: () => void
 }) {
-  const [date, setDate] = useState(() => kstToday(new Date()))
-  const [sessions, setSessions] = useState<SessionSummary[]>([])
-  const [cancelResult, setCancelResult] = useState<string | null>(null)
+  const [roomCode, setRoomCode] = useState(TEST_ROOM_CODE)
+  const [customerNumber, setCustomerNumber] = useState(TEST_CUSTOMER_NUMBER)
+  const [loading, setLoading] = useState(false)
 
-  const load = useCallback(() => {
-    void api.listSessions(date).then(setSessions)
-  }, [api, date])
+  const handleEnter = () => {
+    if (!roomCode.trim()) {
+      alert('방 코드를 입력해주세요')
+      return
+    }
 
-  useEffect(() => { load() }, [load])
+    const session: SessionSummary = {
+      sessionId: roomCode.trim(),
+      studentName: '학생',
+      studentId: 'student-' + roomCode.trim(),
+      scheduledAt: new Date().toISOString(),
+      durationMin: 60,
+      bookTitle: '교재',
+      status: 'IN_PROGRESS',
+    }
+    onEnter(session)
+  }
 
-  const cancel = async (s: SessionSummary) => {
-    // 확인은 여기서 둔다 — 수업 종료와 달리 휴강은 되돌릴 수 없고 연속 동작도 아니다.
-    const late = isLateCancel(s.scheduledAt, new Date())
-    const confirmMessage = late
-      ? '하루 전 마감이 지났어요. 휴강해도 되지만 노쇼로 기록됩니다. 학생의 보강 크레딧은 똑같이 지급돼요.\n\n휴강하시겠어요?'
-      : '휴강하시겠어요?'
-    // 막지 않는다 — 편성 설계 §4.2, 늦은 연락으로 가족을 벌하지 않는다. 확인만 받고 그대로 진행한다.
-    if (!window.confirm(confirmMessage)) return
+  const handleSendPush = async () => {
+    if (!customerNumber.trim()) {
+      alert('고객번호를 입력해주세요')
+      return
+    }
+    if (!roomCode.trim()) {
+      alert('방 코드를 입력해주세요')
+      return
+    }
 
-    const result = await api.cancelSession(s.sessionId)
-    setCancelResult(`${s.studentName}: ${result.status}`)
-    load()
+    setLoading(true)
+    try {
+      const response = await fetch('http://192.168.219.123:3000/api/push/lesson-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          customerNumber: customerNumber.trim(),
+          roomCode: roomCode.trim(),
+          teacherName: '선생님',
+        }),
+      })
+
+      if (response.ok) {
+        alert('수업 요청을 보냈습니다')
+        setCustomerNumber('')
+        setRoomCode('')
+      } else {
+        alert('수업 요청 실패: ' + response.statusText)
+      }
+    } catch (error) {
+      alert('오류 발생: ' + (error instanceof Error ? error.message : '알 수 없는 오류'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleEnter()
+    }
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <button onClick={onStudents}>담당 학생</button>
-      <h1>오늘 수업</h1>
-      {/* 휴강 마감이 24시간이라, 취소할 만한 수업은 대부분 내일 이후다. 날짜를 옮길 수 있어야 마감 안에서 휴강할 수 있다. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button onClick={() => setDate((d) => kstDatePlus(d, -1))}>◀</button>
-        <span>{date}</span>
-        <button onClick={() => setDate((d) => kstDatePlus(d, 1))}>▶</button>
-        <button onClick={() => setDate(kstToday(new Date()))}>오늘</button>
+    <div style={{ padding: 24, maxWidth: 500, margin: '0 auto' }}>
+      <h1>수업 시작</h1>
+
+      {/* 테스트 버튼 */}
+      <div style={{
+        marginBottom: 24,
+        padding: 16,
+        background: '#fff3cd',
+        borderRadius: 8,
+        border: '2px solid #ffc107',
+      }}>
+        <p style={{ margin: '0 0 12px 0', fontSize: 14, fontWeight: 'bold', color: '#856404' }}>
+          ⚡ 빠른 테스트 (고객번호: {TEST_CUSTOMER_NUMBER}, 방코드: {TEST_ROOM_CODE})
+        </p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={handleSendPush}
+            disabled={loading}
+            style={{
+              flex: 1,
+              padding: 10,
+              fontSize: 14,
+              fontWeight: 'bold',
+              borderRadius: 4,
+              border: 'none',
+              background: loading ? '#ccc' : '#ff9800',
+              color: 'white',
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {loading ? '전송 중...' : '📱 푸시 보내기'}
+          </button>
+          <button
+            onClick={handleEnter}
+            style={{
+              flex: 1,
+              padding: 10,
+              fontSize: 14,
+              fontWeight: 'bold',
+              borderRadius: 4,
+              border: 'none',
+              background: '#2196F3',
+              color: 'white',
+              cursor: 'pointer',
+            }}
+          >
+            🎥 방 입장
+          </button>
+        </div>
       </div>
-      {cancelResult && <p>{cancelResult}</p>}
-      {sessions.length === 0 ? (
-        <p>이 날짜에는 수업이 없습니다.</p>
-      ) : (
-        <table>
-          <tbody>
-            {sessions.map((s) => (
-              <tr key={s.sessionId}>
-                <td>{s.scheduledAt.slice(11, 16)}</td>
-                <td>{s.studentName}</td>
-                <td>{s.bookTitle}</td>
-                <td>
-                  {/* 시작 5분 전부터만 입장할 수 있다. 설계 §4.1. 종료해도 예정 시각 +30분 안이면 재입장 가능. 설계 §4.3 */}
-                  <button disabled={!canEnter(s)} onClick={() => onEnter(s)}>
-                    {s.status === 'ENDED' ? '다시 입장' : '입장'}
-                  </button>
-                </td>
-                <td>
-                  {canRequestCancel(s) && (
-                    <button onClick={() => void cancel(s)}>휴강</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+
+      {/* 섹션 1: 수업 요청 */}
+      <div style={{
+        marginBottom: 32,
+        padding: 20,
+        background: '#f9f9f9',
+        borderRadius: 8,
+        border: '1px solid #e0e0e0',
+      }}>
+        <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 16, color: '#333' }}>아이에게 수업 요청 보내기</h2>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500 }}>아이 고객번호:</label>
+          <input
+            type="text"
+            value={customerNumber}
+            onChange={(e) => setCustomerNumber(e.target.value)}
+            placeholder="고객번호를 입력하세요"
+            style={{
+              width: '100%',
+              padding: 10,
+              fontSize: 14,
+              borderRadius: 4,
+              border: '1px solid #ccc',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500 }}>방 코드:</label>
+          <input
+            type="text"
+            value={roomCode}
+            onChange={(e) => setRoomCode(e.target.value)}
+            placeholder="방 코드를 입력하세요"
+            style={{
+              width: '100%',
+              padding: 10,
+              fontSize: 14,
+              borderRadius: 4,
+              border: '1px solid #ccc',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
+
+        <button
+          onClick={handleSendPush}
+          disabled={loading}
+          style={{
+            width: '100%',
+            padding: 12,
+            fontSize: 16,
+            fontWeight: 'bold',
+            borderRadius: 4,
+            border: 'none',
+            background: loading ? '#ccc' : '#4CAF50',
+            color: 'white',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            transition: 'background 0.3s',
+          }}
+        >
+          {loading ? '전송 중...' : '📱 수업 요청 보내기'}
+        </button>
+      </div>
+
+      {/* 섹션 2: 방 입장 */}
+      <div style={{
+        padding: 20,
+        background: '#f0f8ff',
+        borderRadius: 8,
+        border: '1px solid #b3d9ff',
+      }}>
+        <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 16, color: '#333' }}>직접 방 입장하기</h2>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 500 }}>방 코드:</label>
+          <input
+            type="text"
+            placeholder="방 코드를 입력하세요"
+            onKeyPress={handleKeyPress}
+            style={{
+              width: '100%',
+              padding: 10,
+              fontSize: 14,
+              borderRadius: 4,
+              border: '1px solid #ccc',
+              boxSizing: 'border-box',
+            }}
+            onChange={(e) => setRoomCode(e.target.value)}
+            value={roomCode}
+          />
+        </div>
+
+        <button
+          onClick={handleEnter}
+          style={{
+            width: '100%',
+            padding: 12,
+            fontSize: 16,
+            fontWeight: 'bold',
+            borderRadius: 4,
+            border: 'none',
+            background: '#0066cc',
+            color: 'white',
+            cursor: 'pointer',
+            transition: 'background 0.3s',
+          }}
+        >
+          🎥 방 입장
+        </button>
+      </div>
     </div>
   )
 }
