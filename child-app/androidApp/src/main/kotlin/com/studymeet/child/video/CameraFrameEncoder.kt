@@ -16,7 +16,7 @@ interface FrameEncodedListener {
 class CameraFrameEncoder(private val listener: FrameEncodedListener) {
     private val TAG = "CameraFrameEncoder"
     private var lastFrameTime = AtomicLong(0)
-    private val frameInterval = 500 // milliseconds (2 FPS for demo)
+    private val frameInterval = 100 // milliseconds (10 FPS)
     private var frameCount = 0
 
     fun encodeFrame(image: ImageProxy) {
@@ -42,7 +42,7 @@ class CameraFrameEncoder(private val listener: FrameEncodedListener) {
                 )
 
                 val outputStream = ByteArrayOutputStream()
-                yuvImage.compressToJpeg(android.graphics.Rect(0, 0, image.width, image.height), 50, outputStream)
+                yuvImage.compressToJpeg(android.graphics.Rect(0, 0, image.width, image.height), 40, outputStream)
                 val jpegData = outputStream.toByteArray()
 
                 val base64 = Base64.encodeToString(jpegData, Base64.DEFAULT)
@@ -61,20 +61,31 @@ class CameraFrameEncoder(private val listener: FrameEncodedListener) {
     }
 
     private fun nv21FromYuv420(image: ImageProxy): ByteArray {
-        val planes = image.planes
-        val y = planes[0]
-        val u = planes[1]
-        val v = planes[2]
+        val width = image.width
+        val height = image.height
+        val yBuffer = image.planes[0].buffer
+        val uBuffer = image.planes[1].buffer
+        val vBuffer = image.planes[2].buffer
 
-        val ySize = y.buffer.remaining()
-        val uSize = u.buffer.remaining()
-        val vSize = v.buffer.remaining()
+        val ySize = width * height
+        val nv21 = ByteArray(ySize + ySize / 2)
 
-        val nv21 = ByteArray(ySize + uSize + vSize)
+        // Copy Y plane
+        yBuffer.get(nv21, 0, ySize)
 
-        y.buffer.get(nv21, 0, ySize)
-        u.buffer.get(nv21, ySize, uSize)
-        v.buffer.get(nv21, ySize + uSize, vSize)
+        // NV21 needs VU interleaved after Y
+        val chromaRowStride = image.planes[1].rowStride
+        val chromaPixelStride = image.planes[1].pixelStride
+
+        var offset = ySize
+        for (row in 0 until height / 2) {
+            for (col in 0 until width / 2) {
+                val uIndex = row * chromaRowStride + col * chromaPixelStride
+                val vIndex = row * chromaRowStride + col * chromaPixelStride
+                nv21[offset++] = vBuffer.get(vIndex)
+                nv21[offset++] = uBuffer.get(uIndex)
+            }
+        }
 
         return nv21
     }

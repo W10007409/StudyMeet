@@ -27,6 +27,7 @@ import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessaging
+import com.studymeet.child.accessibility.RemoteTouchAccessibilityService
 import com.studymeet.child.input.RemoteInputHandler
 import com.studymeet.child.signaling.SignalingClient
 import com.studymeet.child.signaling.SignalingListener
@@ -36,6 +37,13 @@ import com.studymeet.child.video.RemoteVideoView
 import com.studymeet.child.video.ScreenCaptureManager
 import com.studymeet.child.video.SignalingVideoTransport
 import com.studymeet.child.video.WebRTCVideoSender
+import com.studymeet.child.livekit.LiveKitManager
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.provider.Settings
+import android.widget.Toast
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -60,8 +68,30 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
     private var videoSender: WebRTCVideoSender? = null
     private var isScreenSharing = false
 
+    // --- LiveKit ---
+    private var liveKitManager: LiveKitManager? = null
+
     // --- 원격 터치 입력 ---
     private var remoteInput: RemoteInputHandler? = null
+
+    // --- 오버레이 브로드캐스트 수신 ---
+    private val endCallReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == TeacherOverlayService.ACTION_END_CALL) {
+                endCall()
+            }
+        }
+    }
+
+    /** 오버레이 권한 설정 화면에서 돌아왔을 때 오버레이를 시작한다. */
+    private val overlayPermissionLauncher: ActivityResultLauncher<Intent> =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (Settings.canDrawOverlays(this)) {
+                startTeacherOverlay()
+            } else {
+                Toast.makeText(this, "오버레이 권한이 필요합니다", Toast.LENGTH_SHORT).show()
+            }
+        }
 
     /**
      * 시스템 화면 캡처 동의 다이얼로그의 결과 수신구.
@@ -71,10 +101,13 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
      */
     private val screenCaptureLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            screenCaptureManager?.onPermissionResult(result.resultCode, result.data)
+            // LiveKit이 화면 공유를 단독으로 처리한다. ScreenCaptureManager는 제거됨.
+            if (result.resultCode == RESULT_OK) {
+                liveKitManager?.startScreenShare(result.data)
+            }
         }
 
-    private val signalingServerUrl = "ws://192.168.219.123:3000"
+    private val signalingServerUrl = "ws://192.168.19.46:3000"
     private val testRoomCode = "room-test-001"
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -89,6 +122,7 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
         setupFirebase()
         setupRemoteInput()
         requestCameraPermission()
+        registerEndCallReceiver()
 
         checkIntentData(intent)
     }
@@ -129,12 +163,7 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
     }
 
     private fun bindCameraPreview() {
-        val preview = Preview.Builder().build()
-        val previewView = findViewById<PreviewView>(R.id.local_preview)
-
-        preview.setSurfaceProvider(previewView.surfaceProvider)
-
-        // ImageAnalysis for frame capture and encoding
+        // ImageAnalysis for frame capture and encoding (Preview 없이 동작)
         frameEncoder = CameraFrameEncoder(this)
         val imageAnalysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -151,8 +180,8 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
 
         try {
             cameraProvider?.unbindAll()
-            camera = cameraProvider?.bindToLifecycle(this, cameraSelector, preview, imageAnalysis)
-            Log.d(TAG, "✅ Camera bound successfully with frame analysis")
+            camera = cameraProvider?.bindToLifecycle(this, cameraSelector, imageAnalysis)
+            Log.d(TAG, "✅ Camera bound successfully with frame analysis (no preview)")
         } catch (e: Exception) {
             Log.e(TAG, "❌ Camera binding failed: ${e.message}")
         }
@@ -213,8 +242,8 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
         Log.d(TAG, "방 입장: $roomCode")
         isInCall = true
 
-        findViewById<PreviewView>(R.id.local_preview).visibility = View.VISIBLE
-        findViewById<LinearLayout>(R.id.call_controls).visibility = View.VISIBLE
+        findViewById<PreviewView>(R.id.local_preview).visibility = View.INVISIBLE
+        findViewById<LinearLayout>(R.id.call_controls).visibility = View.GONE
 
         setupCallControls()
 
@@ -222,10 +251,58 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
         signalingClient = SignalingClient(signalingServerUrl, this)
         signalingClient?.connect(roomCode)
 
+        // LiveKit 연결
+        liveKitManager = LiveKitManager(this)
+        liveKitManager?.connect(roomCode, "child-$roomCode") {
+            liveKitManager?.enableCamera()
+            liveKitManager?.enableMicrophone()
+        }
+
+        // 접근성 서비스 확인
+        if (!RemoteTouchAccessibilityService.isAvailable()) {
+            Toast.makeText(this, "원격 터치를 위해 접근성 서비스를 켜주세요", Toast.LENGTH_LONG).show()
+            val a11yIntent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            startActivity(a11yIntent)
+        }
+
         startScreenSharing()
         updateRemoteInputEnabled()
 
-        Log.d(TAG, "✅ 방 입장 - 카메라 표시 및 신호 서버 연결 시작")
+        // 오버레이 권한 확인 후 선생님 카메라 오버레이 시작
+        if (Settings.canDrawOverlays(this)) {
+            startTeacherOverlay()
+        } else {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            overlayPermissionLauncher.launch(intent)
+        }
+
+        Log.d(TAG, "✅ 방 입장 - 신호 서버 연결 및 오버레이 시작")
+    }
+
+    private fun startTeacherOverlay() {
+        val intent = Intent(this, TeacherOverlayService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    private fun stopTeacherOverlay() {
+        stopService(Intent(this, TeacherOverlayService::class.java))
+    }
+
+    private fun registerEndCallReceiver() {
+        val filter = IntentFilter(TeacherOverlayService.ACTION_END_CALL)
+        @Suppress("UnspecifiedRegisterReceiverFlag")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(endCallReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(endCallReceiver, filter)
+        }
     }
 
     // =====================================================================
@@ -287,36 +364,17 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
         }
 
         // Android 13+ 에서는 알림 권한이 없으면 캡처 중 알림이 보이지 않는다.
-        // 서비스 자체는 동작하므로 결과를 기다리지 않고 진행한다.
         ensureNotificationPermission()
 
-        val sender = WebRTCVideoSender(
-            SignalingVideoTransport { signalingClient }
-        ).also { videoSender = it }
-
-        sender.onEnded = { reason ->
-            runOnUiThread { onScreenSharingEnded(reason) }
-        }
-
-        val manager = ScreenCaptureManager(
-            activity = this,
-            sink = sender,
-            config = ScreenCaptureManager.Config(
-                frameRate = 30,
-                // 0 = 원본 해상도. 태블릿 원본 해상도 30fps 는 릴레이 대역폭을
-                // 크게 잡아먹으므로, 네트워크가 좁으면 1280 정도로 조인다.
-                maxWidth = 0,
-                keyFrameIntervalSec = 1
-            )
-        ).also { screenCaptureManager = it }
-
         try {
-            screenCaptureLauncher.launch(manager.createPermissionIntent())
+            // LiveKit이 화면 공유를 단독으로 처리한다. MediaProjection 권한만 요청.
+            val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+            screenCaptureLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
             isScreenSharing = true
-            Log.d(TAG, "화면 공유 동의 요청")
+            Log.d(TAG, "화면 공유 동의 요청 (LiveKit 전용)")
         } catch (e: Exception) {
             Log.e(TAG, "❌ 화면 캡처 동의 요청 실패: ${e.message}", e)
-            releaseScreenSharing()
+            isScreenSharing = false
         }
     }
 
@@ -339,7 +397,6 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
     private fun onScreenSharingEnded(reason: String?) {
         Log.d(TAG, "화면 공유 종료: $reason")
         releaseScreenSharing()
-        findViewById<Button>(R.id.toggle_screen_button)?.text = "화면 공유 시작"
     }
 
     private fun releaseScreenSharing() {
@@ -352,38 +409,11 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
         videoSender = null
     }
 
-    private fun toggleScreenSharing(button: Button) {
-        if (isScreenSharing) {
-            releaseScreenSharing()
-            button.text = "화면 공유 시작"
-        } else {
-            startScreenSharing()
-            button.text = "화면 공유 중지"
-        }
-    }
-
     private fun setupCallControls() {
         val endCallBtn = findViewById<Button>(R.id.end_call_button)
-        val toggleCameraBtn = findViewById<Button>(R.id.toggle_camera_button)
-        val toggleScreenBtn = findViewById<Button>(R.id.toggle_screen_button)
-
         endCallBtn.setOnClickListener {
             endCall()
         }
-
-        toggleCameraBtn.setOnClickListener {
-            toggleCamera(toggleCameraBtn)
-        }
-
-        toggleScreenBtn.setOnClickListener {
-            toggleScreenSharing(toggleScreenBtn)
-        }
-    }
-
-    private fun toggleCamera(button: Button) {
-        isCameraEnabled = !isCameraEnabled
-        button.text = if (isCameraEnabled) "카메라 OFF" else "카메라 ON"
-        Log.d(TAG, "카메라: ${if (isCameraEnabled) "ON" else "OFF"}")
     }
 
     private fun endCall() {
@@ -394,6 +424,10 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
         updateRemoteInputEnabled()
 
         releaseScreenSharing()
+        stopTeacherOverlay()
+
+        liveKitManager?.disconnect()
+        liveKitManager = null
 
         signalingClient?.disconnect()
         signalingClient = null
@@ -442,15 +476,77 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
     }
 
     override fun onMessage(data: String) {
-        // 원격 터치가 가장 먼저다. move 는 초당 수십 개가 들어오므로 로그를 먼저 찍으면
-        // 로그 자체가 지연 요인이 된다. 핸들러가 소비한 메시지는 여기서 끝낸다.
-        if (remoteInput?.handleMessage(data) == true) return
+        // 접근성 서비스가 활성화되어 있으면 접근성 서비스로 터치 처리 (다른 앱에도 터치 가능)
+        // 접근성 서비스가 없으면 기존 RemoteInputHandler로 폴백 (자기 앱 안에서만)
+        if (!RemoteTouchAccessibilityService.isAvailable()) {
+            if (remoteInput?.handleMessage(data) == true) return
+        }
+
+        // 접근성 서비스를 통한 원격 터치 처리
+        try {
+            val json = com.google.gson.JsonParser.parseString(data).asJsonObject
+            val type = json.get("type")?.asString
+
+            if (type == "touch_input") {
+                val x = json.get("x")?.asFloat ?: return
+                val y = json.get("y")?.asFloat ?: return
+                val action = json.get("action")?.asString ?: return
+
+                when (action) {
+                    "click", "down" -> {
+                        RemoteTouchAccessibilityService.tap(x, y)
+                    }
+                    "double_click" -> {
+                        RemoteTouchAccessibilityService.tap(x, y)
+                        // 짧은 딜레이 후 두 번째 탭
+                        android.os.Handler(mainLooper).postDelayed({
+                            RemoteTouchAccessibilityService.tap(x, y)
+                        }, 100)
+                    }
+                }
+                return
+            }
+
+            if (type == "gesture_input") {
+                val gesture = json.get("gesture")?.asString
+                val phase = json.get("phase")?.asString
+                val x = json.get("x")?.asFloat ?: return
+                val y = json.get("y")?.asFloat ?: return
+
+                if (gesture == "drag" && phase == "end") {
+                    val dx = json.get("dx")?.asFloat ?: 0f
+                    val dy = json.get("dy")?.asFloat ?: 0f
+                    RemoteTouchAccessibilityService.swipe(x - dx, y - dy, x, y, 300)
+                }
+                return
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Touch handling error: ${e.message}")
+        }
+
+        // 선생님 카메라 프레임 수신 → 오버레이 서비스로 전달
+        try {
+            val json = com.google.gson.JsonParser.parseString(data).asJsonObject
+            val type = json.get("type")?.asString
+            if (type == "teacher_camera_frame") {
+                val base64Data = json.get("data")?.asString ?: return
+                val bytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                if (bitmap != null) {
+                    TeacherOverlayService.updateFrame(bitmap)
+                }
+                return
+            }
+        } catch (e: Exception) {
+            // 파싱 실패 시 무시
+        }
 
         Log.d(TAG, "📨 Message from signaling server: ${data.take(200)}")
     }
 
     // FrameEncodedListener implementation
     override fun onFrameEncoded(base64Data: String) {
+        Log.d(TAG, "onFrameEncoded called: isInCall=$isInCall, isCameraEnabled=$isCameraEnabled, signalingClient=${signalingClient != null}")
         if (isInCall && isCameraEnabled) {
             signalingClient?.sendMessage("camera_frame", mapOf("data" to base64Data))
         }
@@ -531,9 +627,12 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
 
     override fun onDestroy() {
         super.onDestroy()
+        try { unregisterReceiver(endCallReceiver) } catch (_: Exception) {}
         // 화면 캡처를 먼저 정리한다. VirtualDisplay 와 포그라운드 서비스는
         // 액티비티가 사라져도 살아남기 때문에 여기서 놓치면 그대로 누수된다.
+        liveKitManager?.disconnect()
         releaseScreenSharing()
+        stopTeacherOverlay()
         remoteInput?.release()
         remoteInput = null
         signalingClient?.disconnect()

@@ -8,6 +8,9 @@ import { makeupRoutes } from './routes/makeup.js'
 import { operatorRoutes } from './routes/operator.js'
 import { deviceRoutes } from './routes/device.js'
 import { studentRoutes } from './routes/student.js'
+import { pushRoutes } from './routes/push.js'
+import { signalingRoutes } from './routes/signaling.js'
+import { livekitRoutes } from './routes/livekit.js'
 import { requireOperatorSecret } from './middleware/operatorOnly.js'
 import { createFcmSender } from './push/fcm.js'
 
@@ -26,12 +29,13 @@ const app = Fastify({ logger: true })
 const pushSender = createFcmSender()
 
 // teacher-web(Vite) 은 다른 포트에서 뜨므로 브라우저가 CORS 로 막는다.
-// '*' 로 열지 않는다 — 배포 환경은 반드시 CORS_ORIGIN 을 실제 도메인으로 설정해야 한다.
+// 개발 환경에서는 모든 origin 허용, 배포 환경에서는 제한
 // @fastify/cors 의 기본 methods 는 'GET,HEAD,POST' 뿐이라 PUT(saveNote)이 막힌다 —
 // 실제 브라우저로 검증하다 잡은 문제라 명시적으로 다 나열한다.
 await app.register(cors, {
-  origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
-  methods: ['GET', 'POST', 'PUT'],
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: false
 })
 
 app.register(teacherRoutes, { prisma })
@@ -41,6 +45,11 @@ app.register(makeupRoutes, { prisma })
 app.register(operatorRoutes, { prisma })
 app.register(deviceRoutes, { prisma })
 app.register(studentRoutes, { prisma })
+app.register(pushRoutes, { prisma, pushSender })
+app.register(signalingRoutes, { prefix: '/ws' })
+app.register(livekitRoutes)
+
+app.get('/health', async () => ({ status: 'ok' }))
 
 // operatorOnly 는 시크릿이 틀리거나 없을 때 존재하지 않는 라우트와 구분되지 않는 404 를
 // 돌려줘야 한다(설계 §2.1) — 그래서 이 앱 전역 notFoundHandler가 "진짜 없는 경로"와

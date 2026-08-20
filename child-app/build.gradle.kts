@@ -1,1 +1,5 @@
-// 플러그인 버전은 settings.gradle.kts에서 관리하고, 여기서는 선언하지 않음
+plugins {
+    kotlin("android") apply false
+    id("com.android.application") apply false
+    id("com.android.library") apply false
+}

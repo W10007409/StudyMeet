@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: studymeet-scheduling
+  namespace: studymeet
+  labels:
+    app: scheduling
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: scheduling
+  template:
+    metadata:
+      labels:
+        app: scheduling
+    spec:
+      containers:
+        - name: scheduling
+          image: <AWS_ACCOUNT_ID>.dkr.ecr.ap-northeast-2.amazonaws.com/studymeet-scheduling:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: scheduling-config
+            - secretRef:
+                name: scheduling-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 30

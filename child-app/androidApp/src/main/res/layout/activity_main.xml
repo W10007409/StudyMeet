@@ -5,11 +5,11 @@
     android:layout_height="match_parent"
     android:background="@android:color/black">
 
-    <!-- 로컬 카메라 프리뷰 (항상 표시) -->
+    <!-- 로컬 카메라 프리뷰 (숨김 - 프레임 캡처용으로만 사용) -->
     <androidx.camera.view.PreviewView
         android:id="@+id/local_preview"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
         android:visibility="gone" />
 
     <!-- 원격 비디오 (위치 예약) -->
@@ -76,7 +76,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- 비디오 통화 중 제어 UI -->
+    <!-- 비디오 통화 중 제어 UI (오버레이에 통화종료 버튼이 있으므로 숨김) -->
     <LinearLayout
         android:id="@+id/call_controls"
         android:layout_width="match_parent"
@@ -89,30 +89,11 @@
 
         <Button
             android:id="@+id/end_call_button"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:layout_weight="1"
             android:text="통화 종료"
             android:textSize="14sp"
-            android:layout_marginEnd="8dp" />
-
-        <Button
-            android:id="@+id/toggle_camera_button"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:text="카메라 OFF"
-            android:textSize="14sp"
-            android:layout_marginStart="8dp" />
-
-        <Button
-            android:id="@+id/toggle_screen_button"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:text="화면 공유 중지"
-            android:textSize="14sp"
-            android:layout_marginStart="8dp" />
+            android:visibility="gone" />
     </LinearLayout>
 
 </FrameLayout>

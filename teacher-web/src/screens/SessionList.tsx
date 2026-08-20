@@ -42,7 +42,7 @@ export function SessionList({ onEnter }: {
 
     setLoading(true)
     try {
-      const response = await fetch('http://192.168.219.123:3000/api/push/lesson-request', {
+      const response = await fetch('http://localhost:3000/api/push/lesson-request', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
