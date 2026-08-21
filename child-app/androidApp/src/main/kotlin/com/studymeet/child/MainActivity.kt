@@ -295,6 +295,19 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
         stopService(Intent(this, TeacherOverlayService::class.java))
     }
 
+    private fun startDrawingOverlay() {
+        val intent = Intent(this, DrawingOverlayService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    private fun stopDrawingOverlay() {
+        stopService(Intent(this, DrawingOverlayService::class.java))
+    }
+
     private fun registerEndCallReceiver() {
         val filter = IntentFilter(TeacherOverlayService.ACTION_END_CALL)
         @Suppress("UnspecifiedRegisterReceiverFlag")
@@ -425,6 +438,7 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
 
         releaseScreenSharing()
         stopTeacherOverlay()
+        stopDrawingOverlay()
 
         liveKitManager?.disconnect()
         liveKitManager = null
@@ -523,6 +537,53 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
         } catch (e: Exception) {
             Log.e(TAG, "Touch handling error: ${e.message}")
         }
+
+        // 패드 메시지 수신 → 오버레이에 표시
+        try {
+            val json = com.google.gson.JsonParser.parseString(data).asJsonObject
+            val type = json.get("type")?.asString
+
+            if (type == "pad_input") {
+                val text = json.get("text")?.asString ?: return
+                TeacherOverlayService.showMessage(text)
+                return
+            }
+
+            if (type == "draw_stroke") {
+                val pointsArray = json.getAsJsonArray("points")
+                val points = mutableListOf<Pair<Float, Float>>()
+                for (i in 0 until pointsArray.size()) {
+                    val p = pointsArray[i].asJsonObject
+                    points.add(Pair(p.get("x").asFloat, p.get("y").asFloat))
+                }
+                val color = try {
+                    android.graphics.Color.parseColor(json.get("color")?.asString ?: "#4ECDC4")
+                } catch (e: Exception) { 0xFF4ECDC4.toInt() }
+                val width = json.get("width")?.asFloat ?: 3f
+
+                if (!DrawingOverlayService.isRunning()) {
+                    startDrawingOverlay()
+                }
+                DrawingOverlayService.addStroke(points, color, width)
+                return
+            }
+
+            if (type == "draw_clear") {
+                DrawingOverlayService.clear()
+                return
+            }
+        } catch (_: Exception) {}
+
+        // 선생님이 수업 종료
+        try {
+            val json2 = com.google.gson.JsonParser.parseString(data).asJsonObject
+            val type2 = json2.get("type")?.asString
+            if (type2 == "end_call") {
+                Log.d(TAG, "선생님이 수업을 종료했습니다")
+                runOnUiThread { endCall() }
+                return
+            }
+        } catch (_: Exception) {}
 
         // 선생님 카메라 프레임 수신 → 오버레이 서비스로 전달
         try {
@@ -633,6 +694,7 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
         liveKitManager?.disconnect()
         releaseScreenSharing()
         stopTeacherOverlay()
+        stopDrawingOverlay()
         remoteInput?.release()
         remoteInput = null
         signalingClient?.disconnect()

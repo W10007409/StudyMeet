@@ -82,6 +82,12 @@
             android:exported="false"
             android:foregroundServiceType="specialUse" />
 
+        <!-- 판서 오버레이 서비스 -->
+        <service
+            android:name=".DrawingOverlayService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false" />
+
         <!-- 원격 터치 접근성 서비스 -->
         <service
             android:name=".accessibility.RemoteTouchAccessibilityService"

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { SessionSummary } from '../domain/types'
 import { useSession } from '../webrtc/useSession'
 import { useTouchInput } from '../webrtc/useTouchInput'
@@ -13,44 +13,304 @@ const ACTION_LABEL: Record<string, string> = {
   double_click: '더블탭',
 }
 
+const styles = {
+  root: {
+    height: '100vh',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    background: '#0F1923',
+    position: 'relative' as const,
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    color: '#E8ECF1',
+  },
+  topBar: {
+    padding: '0 20px',
+    height: 52,
+    background: '#1A2634',
+    borderBottom: '1px solid rgba(78, 205, 196, 0.15)',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexShrink: 0,
+    zIndex: 30,
+  },
+  studentInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  },
+  studentName: {
+    margin: 0,
+    fontSize: 15,
+    fontWeight: 600,
+    color: '#E8ECF1',
+    letterSpacing: '-0.01em',
+  },
+  statusDot: (connected: boolean) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 12,
+    color: connected ? '#4ECDC4' : '#7B8794',
+  }),
+  topControls: {
+    display: 'flex',
+    gap: 8,
+    alignItems: 'center',
+  },
+  touchBtn: (enabled: boolean) => ({
+    padding: '6px 14px',
+    fontSize: 12,
+    fontWeight: 500,
+    borderRadius: 6,
+    border: enabled ? '1px solid rgba(78, 205, 196, 0.4)' : '1px solid rgba(123, 135, 148, 0.3)',
+    cursor: 'pointer',
+    background: enabled ? 'rgba(78, 205, 196, 0.12)' : 'rgba(123, 135, 148, 0.08)',
+    color: enabled ? '#4ECDC4' : '#7B8794',
+    transition: 'all 150ms ease',
+    letterSpacing: '0.01em',
+  }),
+  endBtn: {
+    padding: '6px 14px',
+    background: 'rgba(255, 107, 107, 0.12)',
+    color: '#FF6B6B',
+    border: '1px solid rgba(255, 107, 107, 0.3)',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 500,
+    letterSpacing: '0.01em',
+    transition: 'all 150ms ease',
+  },
+  mainContent: {
+    flex: 1,
+    display: 'flex',
+    minHeight: 0,
+  },
+  videoArea: {
+    flex: 1,
+    position: 'relative' as const,
+    minWidth: 0,
+  },
+  liveKitWrapper: {
+    width: '100%',
+    height: '100%',
+    background: '#0A1118',
+    position: 'relative' as const,
+    overflow: 'hidden',
+    pointerEvents: 'none' as const,
+  },
+  touchOverlay: {
+    position: 'absolute' as const,
+    inset: 0,
+    zIndex: 20,
+  },
+  touchBorder: (active: boolean) => ({
+    position: 'absolute' as const,
+    inset: 8,
+    border: `1.5px dashed ${active ? 'rgba(78, 205, 196, 0.7)' : 'rgba(78, 205, 196, 0.12)'}`,
+    borderRadius: 8,
+    pointerEvents: 'none' as const,
+    transition: 'border-color 120ms linear',
+  }),
+  touchIndicator: {
+    position: 'absolute' as const,
+    left: '50%',
+    top: '50%',
+    width: 32,
+    height: 32,
+    borderRadius: '50%',
+    border: '2px solid #4ECDC4',
+    background: 'rgba(78, 205, 196, 0.15)',
+    boxShadow: '0 0 16px rgba(78, 205, 196, 0.5)',
+    opacity: 0,
+    transform: 'translate(-50%, -50%)',
+    pointerEvents: 'none' as const,
+    willChange: 'left, top, transform, opacity' as const,
+  },
+  statusBadges: {
+    position: 'absolute' as const,
+    top: 12,
+    left: 12,
+    display: 'flex',
+    gap: 6,
+    fontSize: 11,
+    color: '#fff',
+    pointerEvents: 'none' as const,
+    zIndex: 25,
+  },
+  actionBadge: {
+    background: 'rgba(26, 38, 52, 0.85)',
+    border: '1px solid rgba(78, 205, 196, 0.25)',
+    padding: '3px 8px',
+    borderRadius: 4,
+    backdropFilter: 'blur(4px)',
+    letterSpacing: '0.01em',
+    color: '#4ECDC4',
+    fontSize: 11,
+  },
+  gestureBadge: {
+    background: 'rgba(26, 38, 52, 0.85)',
+    border: '1px solid rgba(78, 205, 196, 0.25)',
+    padding: '3px 8px',
+    borderRadius: 4,
+    backdropFilter: 'blur(4px)',
+    letterSpacing: '0.01em',
+    color: '#E8ECF1',
+    fontSize: 11,
+  },
+  pip: {
+    position: 'absolute' as const,
+    bottom: 16,
+    left: 16,
+    width: 152,
+    height: 114,
+    background: '#0A1118',
+    borderRadius: 10,
+    overflow: 'hidden',
+    border: '1.5px solid rgba(78, 205, 196, 0.2)',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0,0,0,0.3)',
+    zIndex: 10,
+  },
+  pipVideo: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover' as const,
+    display: 'block',
+  },
+  sidebar: {
+    flexShrink: 0,
+    width: 272,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    background: '#1A2634',
+    borderLeft: '1px solid rgba(78, 205, 196, 0.1)',
+    minHeight: 0,
+  },
+  sidebarHeader: {
+    padding: '14px 16px',
+    borderBottom: '1px solid rgba(78, 205, 196, 0.1)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
+  sidebarTitle: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#E8ECF1',
+    letterSpacing: '0.02em',
+  },
+  sidebarDot: {
+    width: 6,
+    height: 6,
+    borderRadius: '50%',
+    background: '#4ECDC4',
+    boxShadow: '0 0 6px rgba(78, 205, 196, 0.6)',
+  },
+  messageList: {
+    flex: 1,
+    overflow: 'auto' as const,
+    padding: '12px 12px 8px',
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 8,
+  },
+  emptyState: {
+    color: '#7B8794',
+    fontSize: 13,
+    textAlign: 'center' as const,
+    marginTop: 32,
+    lineHeight: 1.6,
+  },
+  messageBubble: (from: 'teacher' | 'student') => ({
+    padding: '8px 10px',
+    background: from === 'teacher' ? 'rgba(78, 205, 196, 0.1)' : 'rgba(232, 236, 241, 0.05)',
+    border: from === 'teacher' ? '1px solid rgba(78, 205, 196, 0.2)' : '1px solid rgba(232, 236, 241, 0.08)',
+    borderRadius: from === 'teacher' ? '10px 10px 2px 10px' : '10px 10px 10px 2px',
+    alignSelf: from === 'teacher' ? 'flex-end' as const : 'flex-start' as const,
+    maxWidth: '88%',
+  }),
+  messageMeta: {
+    fontSize: 10,
+    color: '#7B8794',
+    marginBottom: 4,
+    letterSpacing: '0.02em',
+  },
+  messageText: {
+    fontSize: 13,
+    color: '#E8ECF1',
+    wordBreak: 'break-word' as const,
+    lineHeight: 1.5,
+  },
+  inputArea: {
+    padding: '10px 12px',
+    borderTop: '1px solid rgba(78, 205, 196, 0.1)',
+    display: 'flex',
+    gap: 8,
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  textInput: {
+    flex: 1,
+    padding: '8px 10px',
+    border: '1px solid rgba(78, 205, 196, 0.15)',
+    borderRadius: 6,
+    fontSize: 13,
+    background: 'rgba(15, 25, 35, 0.6)',
+    color: '#E8ECF1',
+    outline: 'none',
+    transition: 'border-color 150ms ease',
+  },
+  sendBtn: {
+    padding: '8px 14px',
+    background: 'rgba(78, 205, 196, 0.15)',
+    color: '#4ECDC4',
+    border: '1px solid rgba(78, 205, 196, 0.3)',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 500,
+    flexShrink: 0,
+    transition: 'all 150ms ease',
+    letterSpacing: '0.01em',
+  },
+} as const
+
 export function Lesson({ session, onEnded }: {
   session: SessionSummary
   onEnded: () => void
 }) {
-  console.log('[Lesson] Component mounted, session:', session.sessionId)
-
   const [padInput, setPadInput] = useState('')
   const [messages, setMessages] = useState<{ from: 'teacher' | 'student'; text: string; time: string }[]>([])
   const [touchEnabled, setTouchEnabled] = useState(true)
+  const [drawingEnabled, setDrawingEnabled] = useState(false)
+  const [penColor, setPenColor] = useState('#4ECDC4')
+  const [penWidth, setPenWidth] = useState(3)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const isDrawingRef = useRef(false)
+  const currentStrokeRef = useRef<{ x: number; y: number }[]>([])
+  const allStrokesRef = useRef<{ points: { x: number; y: number }[]; color: string; width: number }[]>([])
 
-  // WebSocket으로 터치 이벤트 전송
   const wsSend = useCallback((msg: any) => {
     const ws = wsRef.current
     if (ws?.readyState === WebSocket.OPEN) {
-      const data = JSON.stringify(msg)
-      console.log('[Touch] SENDING:', msg?.type, 'x:', msg?.x, 'y:', msg?.y, 'action:', msg?.action, 'url:', ws.url)
-      ws.send(data)
+      ws.send(JSON.stringify(msg))
     } else {
-      console.warn('[Touch] WebSocket NOT open, wsRef:', !!wsRef.current, 'readyState:', ws?.readyState)
+      console.error('[Touch] WebSocket not open, readyState:', ws?.readyState)
     }
   }, [])
-
-  console.log('[Lesson] Refs created')
 
   const onData = useCallback((msg: any) => {
-    console.log('[onData] Received message:', msg?.type, 'has data:', !!msg?.data)
     if (msg.type === 'pad_input') {
-      console.log('[pad_input] Processing pad input')
       const time = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
       setMessages((prev) => [...prev, { from: msg.from, text: msg.text, time }])
-    } else {
-      console.log('[onData] Unknown message type:', msg.type)
     }
   }, [])
 
-  console.log('[useSession] Calling useSession hook...')
   const { localRef, send, connected } = useSession({
     signalingUrl: import.meta.env.VITE_SIGNALING_URL || 'ws://localhost:3000',
     room: session.sessionId,
@@ -58,29 +318,17 @@ export function Lesson({ session, onEnded }: {
     onData,
     enabled: true,
   })
-  console.log('[useSession] Hook returned, connected:', connected)
 
-  // 시그널링 서버에서 직접 메시지 수신 (카메라 프레임, 화면 공유 등)
   useEffect(() => {
-    console.log('[WebSocket] useEffect starting, sessionId:', session.sessionId)
-
     const signalingUrl = import.meta.env.VITE_SIGNALING_URL || 'ws://localhost:3000'
-    console.log('[WebSocket] signalingUrl:', signalingUrl)
-
     const wsUrl = signalingUrl.replace(/^http/, 'ws')
-    console.log('[WebSocket] Creating connection to:', `${wsUrl}/ws?room=${encodeURIComponent(session.sessionId)}`)
-
     const ws = new WebSocket(`${wsUrl}/ws?room=${encodeURIComponent(session.sessionId)}`)
     wsRef.current = ws
-    console.log('[WebSocket] WebSocket object created')
 
     let frameInterval: ReturnType<typeof setInterval> | null = null
     const canvas = document.createElement('canvas')
 
     ws.onopen = () => {
-      console.log('[WebSocket] ✅ Connected to signaling server:', wsUrl)
-
-      // 선생님 카메라 프레임을 아이에게 전송 (2fps)
       frameInterval = setInterval(() => {
         const video = localRef.current
         if (!video || video.videoWidth === 0 || ws.readyState !== WebSocket.OPEN) return
@@ -95,60 +343,147 @@ export function Lesson({ session, onEnded }: {
     }
 
     ws.onmessage = (event) => {
-      console.log('[WebSocket] 📨 Raw message received, size:', event.data.length)
       try {
         const msg = JSON.parse(event.data)
-        console.log('[WebSocket] ✅ Parsed message:', msg.type, 'data keys:', Object.keys(msg))
-        // camera_frame, screen_frame 등 WebSocket으로 들어온 메시지 처리
         onData(msg)
       } catch (e) {
-        console.error('[WebSocket] ❌ Failed to parse message:', e, 'raw:', event.data.substring(0, 100))
+        console.error('[WebSocket] Failed to parse message:', e)
       }
     }
 
     ws.onerror = (error) => {
-      console.error('[WebSocket] ❌ Error:', error)
+      console.error('[WebSocket] Error:', error)
     }
-
-    ws.onclose = () => {
-      console.log('[WebSocket] ❌ Disconnected')
-    }
-
-    console.log('[WebSocket] Event handlers attached')
 
     return () => {
-      console.log('[WebSocket] Cleanup, closing connection')
       if (frameInterval) clearInterval(frameInterval)
-      // wsRef가 이 ws를 가리킬 때만 null로 설정 (StrictMode 이중 실행 방지)
       if (wsRef.current === ws) wsRef.current = null
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close()
-      }
+      if (ws.readyState === WebSocket.OPEN) ws.close()
     }
   }, [session.sessionId, onData])
 
-  // 터치 좌표는 LiveKit 화면 공유 영역 기준으로 WebSocket을 통해 보낸다.
   const { surfaceProps, indicatorRef, status } = useTouchInput({
     send: wsSend,
     objectFit: 'contain',
     enabled: touchEnabled,
   })
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
   useEffect(() => {
-    scrollToBottom()
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // ─── Drawing (판서) ───
+
+  const redrawCanvas = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    for (const stroke of allStrokesRef.current) {
+      if (stroke.points.length < 2) continue
+      ctx.beginPath()
+      ctx.strokeStyle = stroke.color
+      ctx.lineWidth = stroke.width
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      const first = stroke.points[0]
+      ctx.moveTo(first.x * canvas.width, first.y * canvas.height)
+      for (let i = 1; i < stroke.points.length; i++) {
+        ctx.lineTo(stroke.points[i].x * canvas.width, stroke.points[i].y * canvas.height)
+      }
+      ctx.stroke()
+    }
+  }, [])
+
+  const handlePointerDown = useCallback((e: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!drawingEnabled) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    isDrawingRef.current = true
+    const rect = canvas.getBoundingClientRect()
+    const x = (e.clientX - rect.left) / rect.width
+    const y = (e.clientY - rect.top) / rect.height
+    currentStrokeRef.current = [{ x, y }]
+    canvas.setPointerCapture(e.pointerId)
+  }, [drawingEnabled])
+
+  const handlePointerMove = useCallback((e: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawingRef.current || !drawingEnabled) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const rect = canvas.getBoundingClientRect()
+    const x = (e.clientX - rect.left) / rect.width
+    const y = (e.clientY - rect.top) / rect.height
+    const prev = currentStrokeRef.current[currentStrokeRef.current.length - 1]
+    currentStrokeRef.current.push({ x, y })
+
+    // Draw the segment immediately
+    ctx.beginPath()
+    ctx.strokeStyle = penColor
+    ctx.lineWidth = penWidth
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.moveTo(prev.x * canvas.width, prev.y * canvas.height)
+    ctx.lineTo(x * canvas.width, y * canvas.height)
+    ctx.stroke()
+  }, [drawingEnabled])
+
+  const handlePointerUp = useCallback(() => {
+    if (!isDrawingRef.current) return
+    isDrawingRef.current = false
+    const points = currentStrokeRef.current
+    if (points.length >= 2) {
+      const stroke = { points: [...points], color: penColor, width: penWidth }
+      allStrokesRef.current.push(stroke)
+      wsSend({ type: 'draw_stroke', points: stroke.points, color: stroke.color, width: stroke.width })
+    }
+    currentStrokeRef.current = []
+  }, [wsSend])
+
+  const clearDrawing = useCallback(() => {
+    allStrokesRef.current = []
+    const canvas = canvasRef.current
+    if (canvas) {
+      const ctx = canvas.getContext('2d')
+      ctx?.clearRect(0, 0, canvas.width, canvas.height)
+    }
+    wsSend({ type: 'draw_clear' })
+  }, [wsSend])
+
+  // Resize canvas to match video area
+  useEffect(() => {
+    if (!drawingEnabled) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const parent = canvas.parentElement
+    if (!parent) return
+    const resize = () => {
+      canvas.width = parent.clientWidth
+      canvas.height = parent.clientHeight
+      redrawCanvas()
+    }
+    resize()
+    const observer = new ResizeObserver(resize)
+    observer.observe(parent)
+    return () => observer.disconnect()
+  }, [drawingEnabled, redrawCanvas])
+
+  // When drawingEnabled turns on, disable touch; when off, re-enable touch
+  useEffect(() => {
+    if (drawingEnabled) {
+      setTouchEnabled(false)
+    }
+  }, [drawingEnabled])
 
   const sendPadInput = () => {
     if (!padInput.trim()) return
-
     const time = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
     setMessages((prev) => [...prev, { from: 'teacher', text: padInput, time }])
-
-    send({ type: 'pad_input', text: padInput, from: 'teacher' })
+    // WebSocket으로 전송 (아이 오버레이에서 볼 수 있도록)
+    wsSend({ type: 'pad_input', text: padInput, from: 'teacher' })
     setPadInput('')
   }
 
@@ -159,133 +494,215 @@ export function Lesson({ session, onEnded }: {
     }
   }
 
+  const handleEndLesson = () => {
+    const ws = wsRef.current
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'end_call' }))
+    }
+    onEnded()
+  }
+
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#1a1a2e', position: 'relative' }}>
-      {/* 상단 바 */}
-      <div style={{ padding: '10px 16px', background: '#16213e', borderBottom: '1px solid #0f3460', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0, color: '#fff', fontSize: 16 }}>{session.studentName} 수업</h2>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: connected ? '#00e08a' : '#ff6b6b' }}>
-            {connected ? '● 연결됨' : '○ 연결 안 됨'}
-          </span>
+    <div style={styles.root}>
+      {/* Top bar */}
+      <div style={styles.topBar}>
+        <div style={styles.studentInfo}>
+          <h2 style={styles.studentName}>{session.studentName}</h2>
+          <div style={styles.statusDot(connected)}>
+            <StatusDot connected={connected} />
+            <span>{connected ? '연결됨' : '연결 안 됨'}</span>
+          </div>
+        </div>
+        <div style={styles.topControls}>
           <button
-            onClick={() => setTouchEnabled((v) => !v)}
-            style={{
-              padding: '6px 12px', fontSize: 12, borderRadius: 4, border: 'none', cursor: 'pointer',
-              background: touchEnabled ? '#00a06a' : '#555', color: '#fff',
+            onClick={() => {
+              setTouchEnabled((v) => !v)
+              if (!touchEnabled) setDrawingEnabled(false)
             }}
+            style={styles.touchBtn(touchEnabled)}
           >
             {touchEnabled ? '터치 ON' : '터치 OFF'}
           </button>
           <button
-            onClick={onEnded}
-            style={{ padding: '6px 12px', background: '#ff6b6b', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
+            onClick={() => setDrawingEnabled((v) => !v)}
+            style={styles.touchBtn(drawingEnabled)}
           >
+            {drawingEnabled ? '판서 중' : '판서'}
+          </button>
+          {drawingEnabled && (
+            <>
+              {/* 펜 색상 선택 */}
+              {['#4ECDC4', '#FF6B6B', '#FFE66D', '#A8E6CF', '#FFFFFF'].map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setPenColor(c)}
+                  style={{
+                    width: 24, height: 24, borderRadius: '50%', border: penColor === c ? '2px solid #fff' : '2px solid transparent',
+                    background: c, cursor: 'pointer', padding: 0, boxShadow: penColor === c ? '0 0 6px rgba(255,255,255,0.4)' : 'none',
+                  }}
+                />
+              ))}
+              {/* 펜 굵기 선택 */}
+              {[2, 4, 8].map((w) => (
+                <button
+                  key={w}
+                  onClick={() => setPenWidth(w)}
+                  style={{
+                    width: 28, height: 28, borderRadius: 4, cursor: 'pointer', padding: 0,
+                    background: penWidth === w ? 'rgba(78,205,196,0.3)' : 'rgba(255,255,255,0.1)',
+                    border: penWidth === w ? '1px solid #4ECDC4' : '1px solid transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <span style={{ display: 'block', width: w * 2, height: w * 2, borderRadius: '50%', background: '#fff' }} />
+                </button>
+              ))}
+              <button onClick={clearDrawing} style={styles.touchBtn(false)}>
+                지우기
+              </button>
+            </>
+          )}
+          <button onClick={handleEndLesson} style={styles.endBtn}>
             수업 종료
           </button>
         </div>
       </div>
 
-      {/* 메인 콘텐츠 */}
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {/* 좌측: 메인 영역 + 터치 입력 */}
-        <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-          {/* LiveKit 비디오 (아이 카메라 + 화면 공유) */}
-          <div style={{ width: '100%', height: '100%', background: '#111', position: 'relative', overflow: 'hidden', pointerEvents: 'none' }}>
+      {/* Main content */}
+      <div style={styles.mainContent}>
+        {/* Video area */}
+        <div style={styles.videoArea}>
+          {/* LiveKit stream */}
+          <div style={styles.liveKitWrapper}>
             <LiveKitView room={session.sessionId} identity="teacher" />
           </div>
 
-          {/* 터치 오버레이 - LiveKit 비디오 위에 z-index로 배치 */}
+          {/* Touch overlay */}
           <div
             {...surfaceProps}
-            style={{ ...surfaceProps.style, position: 'absolute', inset: 0, zIndex: 20 }}
+            style={{ ...surfaceProps.style, ...styles.touchOverlay, pointerEvents: drawingEnabled ? 'none' : undefined }}
           >
             {touchEnabled && (
-              <div style={{
-                position: 'absolute', inset: 6,
-                border: `2px dashed ${status.pointerCount > 0 ? 'rgba(0,200,120,0.9)' : 'rgba(255,255,255,0.1)'}`,
-                borderRadius: 6, pointerEvents: 'none', transition: 'border-color 120ms linear',
-              }} />
+              <div style={styles.touchBorder(status.pointerCount > 0)} />
             )}
-            <div ref={indicatorRef} style={{
-              position: 'absolute', left: '50%', top: '50%', width: 36, height: 36,
-              borderRadius: '50%', border: '2px solid #00e08a', background: 'rgba(0, 224, 138, 0.18)',
-              boxShadow: '0 0 12px rgba(0, 224, 138, 0.6)', opacity: 0,
-              transform: 'translate(-50%, -50%)', pointerEvents: 'none',
-              willChange: 'left, top, transform, opacity',
-            }} />
+            <div ref={indicatorRef} style={styles.touchIndicator} />
           </div>
 
-          {/* 상태 표시 */}
-          <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', gap: 6, fontSize: 11, color: '#fff', pointerEvents: 'none' }}>
-            {status.lastAction && (
-              <span style={{ background: 'rgba(0,102,204,0.85)', padding: '3px 6px', borderRadius: 3 }}>
-                {ACTION_LABEL[status.lastAction] ?? status.lastAction}
-              </span>
-            )}
-            {status.gesture && (
-              <span style={{ background: 'rgba(0,150,90,0.85)', padding: '3px 6px', borderRadius: 3 }}>
-                {status.gesture === 'pinch' ? `핀치 ×${status.scale.toFixed(2)}` : '드래그'}
-              </span>
-            )}
-          </div>
+          {/* Drawing canvas overlay (판서) */}
+          {drawingEnabled && (
+            <canvas
+              ref={canvasRef}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 22,
+                cursor: 'crosshair',
+                touchAction: 'none',
+                background: 'transparent',
+              }}
+            />
+          )}
 
-          {/* 선생님 카메라 (좌하단 PIP) */}
-          <div style={{
-            position: 'absolute', bottom: 12, left: 12, width: 160, height: 120,
-            background: '#000', borderRadius: 8, overflow: 'hidden',
-            border: '2px solid #0f3460', boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-            zIndex: 10,
-          }}>
-            <video ref={localRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            <div style={{ position: 'absolute', bottom: 4, left: 4, fontSize: 10, color: '#fff', background: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: 3, pointerEvents: 'none' }}>
-              내 카메라
+          {/* Action / gesture badges */}
+          {(status.lastAction || status.gesture) && (
+            <div style={styles.statusBadges}>
+              {status.lastAction && (
+                <span style={styles.actionBadge}>
+                  {ACTION_LABEL[status.lastAction] ?? status.lastAction}
+                </span>
+              )}
+              {status.gesture && (
+                <span style={styles.gestureBadge}>
+                  {status.gesture === 'pinch'
+                    ? `핀치 ×${status.scale.toFixed(2)}`
+                    : '드래그'}
+                </span>
+              )}
             </div>
+          )}
+
+          {/* Teacher camera PIP */}
+          <div style={styles.pip}>
+            <video ref={localRef} autoPlay playsInline muted style={styles.pipVideo} />
           </div>
         </div>
 
-        {/* 우측: 패드 메시지 */}
-        <div style={{ flex: '0 0 280px', display: 'flex', flexDirection: 'column', background: '#16213e', borderLeft: '1px solid #0f3460', minHeight: 0 }}>
-          <div style={{ padding: 10, borderBottom: '1px solid #0f3460', fontWeight: 'bold', color: '#fff', fontSize: 14 }}>패드</div>
+        {/* Right sidebar — pad messages */}
+        <div style={styles.sidebar}>
+          <div style={styles.sidebarHeader}>
+            <div style={styles.sidebarDot} />
+            <span style={styles.sidebarTitle}>패드</span>
+          </div>
 
-          <div style={{ flex: 1, overflow: 'auto', padding: 10, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={styles.messageList}>
             {messages.length === 0 ? (
-              <div style={{ color: '#555', fontSize: 13, textAlign: 'center', marginTop: 20 }}>메시지가 없습니다</div>
+              <div style={styles.emptyState}>
+                아직 메시지가 없습니다
+              </div>
             ) : (
               messages.map((msg, idx) => (
-                <div key={idx} style={{
-                  marginBottom: 8, padding: 8,
-                  background: msg.from === 'teacher' ? '#0f3460' : '#1a1a2e',
-                  borderRadius: 6, alignSelf: msg.from === 'teacher' ? 'flex-end' : 'flex-start', maxWidth: '90%',
-                }}>
-                  <div style={{ fontSize: 11, color: '#888', marginBottom: 3 }}>
-                    {msg.from === 'teacher' ? '선생님' : '학생'} {msg.time}
+                <div key={idx} style={styles.messageBubble(msg.from)}>
+                  <div style={styles.messageMeta}>
+                    {msg.from === 'teacher' ? '선생님' : '학생'} · {msg.time}
                   </div>
-                  <div style={{ fontSize: 13, color: '#ddd', wordWrap: 'break-word' }}>{msg.text}</div>
+                  <div style={styles.messageText}>{msg.text}</div>
                 </div>
               ))
             )}
             <div ref={messagesEndRef} />
           </div>
 
-          <div style={{ padding: 10, borderTop: '1px solid #0f3460', display: 'flex', gap: 6 }}>
+          <div style={styles.inputArea}>
             <input
               type="text"
               value={padInput}
               onChange={(e) => setPadInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="입력..."
-              style={{ flex: 1, padding: 8, border: '1px solid #0f3460', borderRadius: 4, fontSize: 13, background: '#1a1a2e', color: '#fff' }}
+              placeholder="메시지 입력..."
+              style={styles.textInput}
             />
-            <button
-              onClick={sendPadInput}
-              style={{ padding: '8px 12px', background: '#0066cc', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
-            >
+            <button onClick={sendPadInput} style={styles.sendBtn}>
               전송
             </button>
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+// Animated connection status dot
+function StatusDot({ connected }: { connected: boolean }) {
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', width: 8, height: 8 }}>
+      <span style={{
+        position: 'absolute',
+        inset: 0,
+        borderRadius: '50%',
+        background: connected ? '#4ECDC4' : '#7B8794',
+        animation: connected ? 'pulse-ring 2s ease-out infinite' : 'none',
+        opacity: 0.4,
+      }} />
+      <span style={{
+        position: 'relative',
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        background: connected ? '#4ECDC4' : '#7B8794',
+        boxShadow: connected ? '0 0 6px rgba(78, 205, 196, 0.7)' : 'none',
+        display: 'inline-block',
+      }} />
+      <style>{`
+        @keyframes pulse-ring {
+          0% { transform: scale(1); opacity: 0.5; }
+          70% { transform: scale(2.2); opacity: 0; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
+      `}</style>
+    </span>
   )
 }

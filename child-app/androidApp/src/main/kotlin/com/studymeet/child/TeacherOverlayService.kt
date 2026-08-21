@@ -15,8 +15,10 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.text.TextUtils
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.core.app.NotificationCompat
 
 /**
@@ -45,11 +47,16 @@ class TeacherOverlayService : Service() {
         fun updateFrame(bitmap: Bitmap) {
             instance?.showFrame(bitmap)
         }
+
+        fun showMessage(text: String) {
+            instance?.displayMessage(text)
+        }
     }
 
     private lateinit var windowManager: WindowManager
     private var overlayView: View? = null
     private var teacherImageView: ImageView? = null
+    private var messageTextView: TextView? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -104,36 +111,74 @@ class TeacherOverlayService : Service() {
         // 컨테이너: 세로 LinearLayout (이미지 + 버튼)
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(0xCC000000.toInt())
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            // Rounded background
+            val bg = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xE6181818.toInt())
+                cornerRadius = 16 * density
+            }
+            background = bg
             setPadding(
-                (4 * density).toInt(),
-                (4 * density).toInt(),
-                (4 * density).toInt(),
-                (4 * density).toInt()
+                (6 * density).toInt(),
+                (6 * density).toInt(),
+                (6 * density).toInt(),
+                (8 * density).toInt()
             )
+            elevation = 8 * density
         }
 
-        // 선생님 카메라 ImageView (160x120dp)
-        val imgW = (160 * density).toInt()
-        val imgH = (120 * density).toInt()
+        // 선생님 카메라 ImageView (140x105dp)
+        val imgW = (140 * density).toInt()
+        val imgH = (105 * density).toInt()
         teacherImageView = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(0xFF222222.toInt())
+            setBackgroundColor(0xFF333333.toInt())
+            // Rounded corners for image
+            clipToOutline = true
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, 12 * density)
+                }
+            }
             layoutParams = LinearLayout.LayoutParams(imgW, imgH)
         }
         container.addView(teacherImageView)
 
-        // 통화종료 버튼
-        val endCallBtn = Button(this).apply {
-            text = "통화종료"
+        // 메시지 텍스트뷰 (선생님 패드 메시지 표시)
+        messageTextView = TextView(this).apply {
             textSize = 12f
-            setBackgroundColor(0xFFFF4444.toInt())
             setTextColor(0xFFFFFFFF.toInt())
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                topMargin = (4 * density).toInt()
+            setBackgroundColor(0xAA000000.toInt())
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+            setPadding(
+                (6 * density).toInt(),
+                (4 * density).toInt(),
+                (6 * density).toInt(),
+                (4 * density).toInt()
+            )
+            layoutParams = LinearLayout.LayoutParams(imgW, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = (2 * density).toInt()
+            }
+            visibility = View.GONE
+        }
+        container.addView(messageTextView)
+
+        // 통화종료 버튼 (작은 빨간 원)
+        val btnSize = (36 * density).toInt()
+        val endCallBtn = Button(this).apply {
+            text = "\u2715"
+            textSize = 14f
+            setTextColor(0xFFFFFFFF.toInt())
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, 0, 0, 0)
+            val btnBg = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(0xFFE74C3C.toInt())
+            }
+            background = btnBg
+            layoutParams = LinearLayout.LayoutParams(btnSize, btnSize).apply {
+                topMargin = (6 * density).toInt()
             }
             setOnClickListener {
                 sendBroadcast(Intent(ACTION_END_CALL).setPackage(packageName))
@@ -141,7 +186,7 @@ class TeacherOverlayService : Service() {
         }
         container.addView(endCallBtn)
 
-        // WindowManager 레이아웃 파라미터
+        // WindowManager layout params
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -153,12 +198,11 @@ class TeacherOverlayService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
+            gravity = Gravity.TOP or Gravity.END
             x = (16 * density).toInt()
-            y = (100 * density).toInt()
+            y = (80 * density).toInt()
         }
 
-        // 드래그 처리
         setupDrag(container, params)
 
         windowManager.addView(container, params)
@@ -201,6 +245,7 @@ class TeacherOverlayService : Service() {
         }
         overlayView = null
         teacherImageView = null
+        messageTextView = null
     }
 
     // ─────────────────────────────────────────────
@@ -211,5 +256,23 @@ class TeacherOverlayService : Service() {
         teacherImageView?.post {
             teacherImageView?.setImageBitmap(bitmap)
         }
+    }
+
+    // ─────────────────────────────────────────────
+    // 메시지 표시
+    // ─────────────────────────────────────────────
+
+    private fun displayMessage(text: String) {
+        messageTextView?.post {
+            messageTextView?.text = text
+            messageTextView?.visibility = View.VISIBLE
+            // 5초 후 숨기기
+            messageTextView?.removeCallbacks(hideMessageRunnable)
+            messageTextView?.postDelayed(hideMessageRunnable, 5000)
+        }
+    }
+
+    private val hideMessageRunnable = Runnable {
+        messageTextView?.visibility = View.GONE
     }
 }

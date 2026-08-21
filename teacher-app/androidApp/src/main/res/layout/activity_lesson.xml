@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@color/bg_primary">
+
+    <!-- Left: Student screen share -->
+    <FrameLayout
+        android:id="@+id/student_screen_container"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:background="#0A1118">
+
+        <io.livekit.android.renderer.SurfaceViewRenderer
+            android:id="@+id/student_screen_renderer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <com.studymeet.teacher.overlay.DrawingView
+            android:id="@+id/drawing_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
+        <View
+            android:id="@+id/touch_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:id="@+id/connection_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_margin="12dp"
+            android:text="연결 대기..."
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:background="#CC1A2634"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp" />
+    </FrameLayout>
+
+    <!-- Right: Controls panel -->
+    <LinearLayout
+        android:layout_width="280dp"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="@color/bg_card">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:background="@color/bg_card">
+
+            <TextView
+                android:id="@+id/student_name_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="학생"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/end_lesson_button"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="수업 종료"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:background="@drawable/btn_danger_bg"
+                android:stateListAnimator="@null"
+                android:paddingHorizontal="16dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="8dp"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/touch_toggle_button"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="터치"
+                android:textColor="@color/accent"
+                android:textSize="12sp"
+                android:background="@drawable/edit_text_bg"
+                android:stateListAnimator="@null"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/draw_toggle_button"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="판서"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:background="@drawable/edit_text_bg"
+                android:stateListAnimator="@null"
+                android:layout_marginHorizontal="4dp" />
+
+            <Button
+                android:id="@+id/clear_draw_button"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="지우기"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:background="@drawable/edit_text_bg"
+                android:stateListAnimator="@null"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#1A4ECDC4" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="메시지"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp" />
+
+        <ScrollView
+            android:id="@+id/messages_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:paddingHorizontal="12dp">
+
+            <LinearLayout
+                android:id="@+id/messages_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </ScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="12dp"
+            android:gravity="center_vertical">
+
+            <EditText
+                android:id="@+id/message_input"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:background="@drawable/edit_text_bg"
+                android:hint="메시지 입력..."
+                android:textColorHint="#555"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:paddingHorizontal="12dp"
+                android:singleLine="true"
+                android:inputType="text"
+                android:importantForAutofill="no"
+                android:layout_marginEnd="8dp" />
+
+            <Button
+                android:id="@+id/send_message_button"
+                android:layout_width="48dp"
+                android:layout_height="40dp"
+                android:text="전송"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:background="@drawable/btn_primary_bg"
+                android:stateListAnimator="@null" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
+            android:background="#0A1118">
+
+            <io.livekit.android.renderer.SurfaceViewRenderer
+                android:id="@+id/teacher_camera_renderer"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_margin="4dp"
+                android:text="내 카메라"
+                android:textColor="#AAFFFFFF"
+                android:textSize="10sp"
+                android:background="#88000000"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="2dp" />
+        </FrameLayout>
+    </LinearLayout>
+</LinearLayout>

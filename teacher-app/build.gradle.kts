@@ -1,0 +1,4 @@
+plugins {
+    kotlin("android") apply false
+    id("com.android.application") apply false
+}
