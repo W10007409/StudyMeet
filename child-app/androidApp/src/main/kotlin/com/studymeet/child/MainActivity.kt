@@ -107,7 +107,7 @@ class MainActivity : AppCompatActivity(), SignalingListener, FrameEncodedListene
             }
         }
 
-    private val signalingServerUrl = "ws://192.168.15.136:3000"
+    private val signalingServerUrl = "wss://study-meet.wjthinkbig.com"
     private val testRoomCode = "room-test-001"
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -29,9 +29,9 @@ import java.util.concurrent.TimeUnit
 class LessonActivity : AppCompatActivity() {
 
     private val TAG = "TeacherLesson"
-    private val SIGNALING_URL = "ws://192.168.15.136:3000"
+    private val SIGNALING_URL = "wss://study-meet.wjthinkbig.com"
     private val LIVEKIT_URL = "wss://helpmanager-cgkgdjae.livekit.cloud"
-    private val TOKEN_API = "http://192.168.15.136:3000/api/livekit/token"
+    private val TOKEN_API = "https://study-meet.wjthinkbig.com/api/livekit/token"
 
     private var room: Room? = null
     private var signalingWs: WebSocket? = null

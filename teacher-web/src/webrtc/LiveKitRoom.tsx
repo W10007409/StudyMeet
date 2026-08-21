@@ -9,7 +9,7 @@ import {
 import { Track } from 'livekit-client'
 
 const LIVEKIT_URL = 'wss://helpmanager-cgkgdjae.livekit.cloud'
-const TOKEN_API = 'http://localhost:3000/api/livekit/token'
+const TOKEN_API = 'https://study-meet.wjthinkbig.com/api/livekit/token'
 
 function Tracks() {
   const screenTracks = useTracks([Track.Source.ScreenShare])

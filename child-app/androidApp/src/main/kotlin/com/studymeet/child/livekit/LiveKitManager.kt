@@ -17,7 +17,7 @@ class LiveKitManager(private val context: Context) {
 
     private val TAG = "LiveKitManager"
     private val LIVEKIT_URL = "wss://helpmanager-cgkgdjae.livekit.cloud"
-    private val TOKEN_API = "http://192.168.19.46:3000/api/livekit/token"
+    private val TOKEN_API = "https://study-meet.wjthinkbig.com/api/livekit/token"
 
     private var room: Room? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
