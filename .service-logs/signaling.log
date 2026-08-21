@@ -1,0 +1,390 @@
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:8080
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at node:net:2203:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:518:28)
+    at emitErrorNT (node:net:1973:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 8080
+}
+
+Node.js v22.14.0
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:8080
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at node:net:2203:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:518:28)
+    at emitErrorNT (node:net:1973:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 8080
+}
+
+Node.js v22.14.0
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:8080
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at node:net:2203:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:518:28)
+    at emitErrorNT (node:net:1973:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 8080
+}
+
+Node.js v22.14.0
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:8080
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at node:net:2203:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:518:28)
+    at emitErrorNT (node:net:1973:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 8080
+}
+
+Node.js v22.14.0
+./manage-services.sh: line 101: 26676 Killed: 9               npm start
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:8080
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at node:net:2203:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:518:28)
+    at emitErrorNT (node:net:1973:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 8080
+}
+
+Node.js v22.14.0
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+./manage-services.sh: line 101: 32860 Killed: 9               npm start
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:8080
+teacher page: http://0.0.0.0:8080/teacher.html?room=phase0&role=callee
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:8080
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at node:net:2203:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:518:28)
+    at emitErrorNT (node:net:1973:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 8080
+}
+
+Node.js v22.14.0
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:3000
+teacher page: http://0.0.0.0:3000/teacher.html?room=phase0&role=callee
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:3000
+teacher page: http://0.0.0.0:3000/teacher.html?room=phase0&role=callee
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at node:net:2203:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:518:28)
+    at emitErrorNT (node:net:1973:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+
+Node.js v22.14.0
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:3000
+teacher page: http://0.0.0.0:3000/teacher.html?room=phase0&role=callee
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at node:net:2203:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:518:28)
+    at emitErrorNT (node:net:1973:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+
+Node.js v22.14.0
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:3000
+teacher page: http://0.0.0.0:3000/teacher.html?room=phase0&role=callee
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at node:net:2203:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:518:28)
+    at emitErrorNT (node:net:1973:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+
+Node.js v22.14.0
+./manage-services.sh: line 101: 69289 Killed: 9               PORT=3000 npm start
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:3000
+teacher page: http://0.0.0.0:3000/teacher.html?room=phase0&role=callee
+[join] room=room-test-001 peers=1
+[join] room=room-test-001 peers=2
+[leave] room=room-test-001 peers=1
+[leave] room=room-test-001 peers=0
+[join] room=room-test-001 peers=1
+[join] room=room-test-001 peers=2
+[leave] room=room-test-001 peers=1
+[join] room=room-test-001 peers=2
+[leave] room=room-test-001 peers=1
+[leave] room=room-test-001 peers=0
+[join] room=room-test-001 peers=1
+[join] room=room-test-001 peers=2
+[join] room=phase0 peers=1
+[leave] room=phase0 peers=0
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:3000
+teacher page: http://0.0.0.0:3000/teacher.html?room=phase0&role=callee
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at node:net:2203:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:518:28)
+    at emitErrorNT (node:net:1973:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+
+Node.js v22.14.0
+[join] room=phase0 peers=1
+[leave] room=phase0 peers=0
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:3000
+teacher page: http://0.0.0.0:3000/teacher.html?room=phase0&role=callee
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at node:net:2203:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:518:28)
+    at emitErrorNT (node:net:1973:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+
+Node.js v22.14.0
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:3000
+teacher page: http://0.0.0.0:3000/teacher.html?room=phase0&role=callee
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:3000
+teacher page: http://0.0.0.0:3000/teacher.html?room=phase0&role=callee
+./manage-services.sh: line 101: 72066 Killed: 9               PORT=3000 npm start
+
+> studymeet-signaling-spike@0.1.0 start
+> node server.js
+
+signaling + static server listening on http://0.0.0.0:3000
+teacher page: http://0.0.0.0:3000/teacher.html?room=phase0&role=callee
+./manage-services.sh: line 101: 74755 Killed: 9               PORT=3000 npm start

@@ -18,7 +18,7 @@ import org.json.JSONObject
 class MainActivity : AppCompatActivity() {
 
     private val TAG = "TeacherMain"
-    private val API_BASE = "http://192.168.19.46:3000"
+    private val API_BASE = "http://192.168.15.136:3000"
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     override fun onCreate(savedInstanceState: Bundle?) {

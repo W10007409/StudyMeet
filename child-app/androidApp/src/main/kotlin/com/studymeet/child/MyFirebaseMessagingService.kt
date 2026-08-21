@@ -116,7 +116,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                     .build()
 
                 val request = Request.Builder()
-                    .url("http://192.168.19.46:3000/devices")
+                    .url("http://192.168.15.136:3000/devices")
                     .post(requestBody)
                     .build()
 
